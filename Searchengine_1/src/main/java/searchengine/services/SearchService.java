@@ -193,12 +193,16 @@ public class SearchService {
 
             return indexRepository.findPagesByLemmas(lemmas.stream()
                     .map(Lemma::getLemma)
-                    .collect(Collectors.toList()));
+                    .distinct()
+                    .collect(Collectors.toList()),
+                    lemmas.stream().map(Lemma::getLemma).distinct().count());
         } else {
 
             return indexRepository.findPagesByLemmasAndSite(lemmas.stream()
                     .map(Lemma::getLemma)
-                    .collect(Collectors.toList()), site);
+                    .distinct()
+                    .collect(Collectors.toList()), site,
+                    lemmas.stream().map(Lemma::getLemma).distinct().count());
         }
     }
 

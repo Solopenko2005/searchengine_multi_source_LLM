@@ -1882,6 +1882,12 @@ var DocumentUpload = function(){
     function showReport($form, result){
         clearMessages($form);
         var $group = $form.find('.form-group_row');
+        if (result.accepted) {
+            $group.append('<div class="API-success">' +
+                (result.message || 'Документы приняты в фоновую индексацию') +
+                ' (задача ' + (result.jobId || 'создана') + ')</div>');
+            return;
+        }
         var overallClass = result.success > 0 ? 'API-success' : 'API-error';
         $group.append('<div class="' + overallClass + '">' + (result.message || '') + '</div>');
 

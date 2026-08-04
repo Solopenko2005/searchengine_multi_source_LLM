@@ -16,6 +16,15 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtDecoders;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
@@ -46,6 +55,8 @@ public final class SecurityConfig {
                         "/api/indexing/status").authenticated()
                 .antMatchers(HttpMethod.POST, "/api/assistant/chat").authenticated()
                 .antMatchers(HttpMethod.POST, "/api/uploadDocument").authenticated()
+                .antMatchers(HttpMethod.POST, "/api/documents/indexing/stop").authenticated()
+                .antMatchers(HttpMethod.PUT, "/api/assistant/profile").authenticated()
                 .antMatchers("/api/**").hasRole("ADMIN")
                 .anyRequest().authenticated());
     }
@@ -93,6 +104,12 @@ public final class SecurityConfig {
     @Configuration
     @ConditionalOnProperty(name = "app.security.mode", havingValue = "jwt")
     static class JwtSecurity {
+        @Value("${app.security.jwt.authorities-claim:roles}")
+        private String authoritiesClaim;
+
+        @Value("${app.security.jwt.principal-claim:sub}")
+        private String principalClaim;
+
         @Bean
         SecurityFilterChain jwtFilterChain(HttpSecurity http,
                                            CorsConfigurationSource corsConfigurationSource,
@@ -107,12 +124,41 @@ public final class SecurityConfig {
             return http.build();
         }
 
+        @Bean
+        JwtDecoder jwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri:}") String issuerUri,
+                              @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri:}") String jwkSetUri,
+                              @Value("${app.security.jwt.audience:}") String audience) {
+            JwtDecoder decoder;
+            if (jwkSetUri != null && !jwkSetUri.isBlank()) {
+                decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+            } else if (issuerUri != null && !issuerUri.isBlank()) {
+                decoder = JwtDecoders.fromIssuerLocation(issuerUri);
+            } else {
+                throw new IllegalStateException("JWT mode requires AUTH_ISSUER_URI or AUTH_JWK_SET_URI");
+            }
+
+            OAuth2TokenValidator<Jwt> standard = issuerUri == null || issuerUri.isBlank()
+                    ? JwtValidators.createDefault()
+                    : JwtValidators.createDefaultWithIssuer(issuerUri);
+            OAuth2TokenValidator<Jwt> audienceValidator = token -> {
+                if (audience == null || audience.isBlank() || token.getAudience().contains(audience)) {
+                    return OAuth2TokenValidatorResult.success();
+                }
+                return OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token",
+                        "Required audience is missing", null));
+            };
+            ((org.springframework.security.oauth2.jwt.NimbusJwtDecoder) decoder)
+                    .setJwtValidator(new DelegatingOAuth2TokenValidator<>(standard, audienceValidator));
+            return decoder;
+        }
+
         private JwtAuthenticationConverter jwtAuthenticationConverter() {
             JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
-            authorities.setAuthoritiesClaimName("roles");
+            authorities.setAuthoritiesClaimName(authoritiesClaim);
             authorities.setAuthorityPrefix("ROLE_");
             JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
             converter.setJwtGrantedAuthoritiesConverter(authorities);
+            converter.setPrincipalClaimName(principalClaim);
             return converter;
         }
     }

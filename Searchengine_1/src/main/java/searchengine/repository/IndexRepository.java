@@ -12,14 +12,19 @@ import searchengine.model.Site;
 import java.util.List;
 
 public interface IndexRepository extends JpaRepository<SearchIndex, Long> {
-    @Query("SELECT DISTINCT si.page FROM SearchIndex si WHERE si.lemma.lemma IN :lemmas")
-    List<Page> findPagesByLemmas(@Param("lemmas") List<String> lemmas);
+    @Query("SELECT si.page FROM SearchIndex si WHERE si.lemma.lemma IN :lemmas " +
+            "GROUP BY si.page HAVING COUNT(DISTINCT si.lemma.lemma) = :lemmaCount")
+    List<Page> findPagesByLemmas(@Param("lemmas") List<String> lemmas,
+                                 @Param("lemmaCount") long lemmaCount);
 
     @Query("SELECT si.ranking FROM SearchIndex si WHERE si.page = :page AND si.lemma = :lemma")
     Float findRankByPageAndLemma(@Param("page") Page page, @Param("lemma") Lemma lemma);
 
     List<SearchIndex> findByPage(Page page);
 
-    @Query("SELECT DISTINCT si.page FROM SearchIndex si WHERE si.lemma.lemma IN :lemmas AND si.page.site = :site")
-    List<Page> findPagesByLemmasAndSite(@Param("lemmas") List<String> lemmas, @Param("site") Site site);
+    @Query("SELECT si.page FROM SearchIndex si WHERE si.lemma.lemma IN :lemmas AND si.page.site = :site " +
+            "GROUP BY si.page HAVING COUNT(DISTINCT si.lemma.lemma) = :lemmaCount")
+    List<Page> findPagesByLemmasAndSite(@Param("lemmas") List<String> lemmas,
+                                        @Param("site") Site site,
+                                        @Param("lemmaCount") long lemmaCount);
 }

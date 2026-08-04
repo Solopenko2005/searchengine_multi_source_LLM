@@ -8,6 +8,10 @@ import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.multipart.MultipartFile;
 import searchengine.config.IndexingState;
 import searchengine.model.*;
@@ -16,6 +20,10 @@ import searchengine.repository.SiteRepository;
 import searchengine.repository.TopicRepository;
 
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -23,6 +31,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import javax.annotation.PreDestroy;
 
 /**
  * Сервис индексации источников информации, загруженных в виде отдельных файлов
@@ -58,6 +73,135 @@ public class DocumentIndexingService {
     private final IndexingState indexingState; // общее состояние индексации всех источников
     private final CurrentUserService currentUserService;
 
+    @Value("${indexing-settings.documents.enabled:true}")
+    private boolean documentIndexingEnabled;
+
+    @Value("${indexing-settings.documents.max-file-size-bytes:52428800}")
+    private long maxFileSizeBytes;
+
+    // The shared document Site/Lemma aggregate is updated transactionally; serial execution
+    // prevents frequency races while still keeping uploads outside HTTP request threads.
+    private final ExecutorService documentExecutor = Executors.newSingleThreadExecutor();
+    private final Map<String, DocumentJob> jobsByOwner = new ConcurrentHashMap<>();
+    private final ThreadLocal<DocumentJob> currentJob = new ThreadLocal<>();
+
+    /** Accepts files, snapshots their bytes and starts a cancellable background job. */
+    public Map<String, Object> submitDocuments(MultipartFile[] files) {
+        if (!documentIndexingEnabled) {
+            return error("Индексация документов отключена настройкой DOCUMENT_INDEXING_ENABLED");
+        }
+        if (files == null || files.length == 0) {
+            return error("Не выбран ни один файл");
+        }
+
+        String ownerId = currentUserService.getUserId();
+        DocumentJob previous = jobsByOwner.get(ownerId);
+        if (previous != null && previous.isRunning()) {
+            return error("Индексация документов уже выполняется");
+        }
+
+        MultipartFile[] snapshots = new MultipartFile[files.length];
+        try {
+            for (int i = 0; i < files.length; i++) {
+                MultipartFile file = files[i];
+                if (file == null || file.isEmpty()) {
+                    return error("Один из загруженных файлов пуст");
+                }
+                if (file.getSize() > maxFileSizeBytes) {
+                    return error("Файл " + file.getOriginalFilename() + " превышает допустимый размер");
+                }
+                snapshots[i] = new ByteArrayMultipartFile(file.getName(), file.getOriginalFilename(),
+                        file.getContentType(), file.getBytes());
+            }
+        } catch (IOException e) {
+            return error("Не удалось принять загруженные файлы: " + e.getMessage());
+        }
+
+        DocumentJob job = new DocumentJob(ownerId, files.length);
+        jobsByOwner.put(ownerId, job);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        documentExecutor.submit(() -> runJob(job, snapshots, authentication));
+
+        Map<String, Object> response = new java.util.LinkedHashMap<>();
+        response.put("result", true);
+        response.put("accepted", true);
+        response.put("jobId", job.id);
+        response.put("state", job.state);
+        response.put("total", job.total);
+        response.put("message", "Документы приняты, индексация запущена в фоне");
+        return response;
+    }
+
+    public Map<String, Object> stopCurrentUserJob() {
+        String ownerId = currentUserService.getUserId();
+        DocumentJob job = jobsByOwner.get(ownerId);
+        if (job == null || !job.isRunning()) {
+            return error("Активная индексация документов не найдена");
+        }
+        job.stopRequested.set(true);
+        job.state = "STOPPING";
+        return Map.of("result", true, "jobId", job.id, "state", job.state,
+                "message", "Остановка индексации запрошена");
+    }
+
+    public Map<String, Object> currentUserStatus() {
+        String ownerId = currentUserService.getUserId();
+        DocumentJob job = jobsByOwner.get(ownerId);
+        long indexedDocuments = pageRepository.findBySiteSourceTypeOrderByIdDesc(SourceType.DOCUMENT).stream()
+                .filter(currentUserService::canAccess)
+                .count();
+        Map<String, Object> status = new java.util.LinkedHashMap<>();
+        status.put("result", true);
+        status.put("enabled", documentIndexingEnabled);
+        status.put("indexedDocuments", indexedDocuments);
+        if (job == null) {
+            status.put("inProgress", false);
+            status.put("state", "IDLE");
+            status.put("ready", indexedDocuments > 0);
+            return status;
+        }
+        status.put("jobId", job.id);
+        status.put("state", job.state);
+        status.put("inProgress", job.isRunning());
+        status.put("ready", !job.isRunning() && "COMPLETED".equals(job.state));
+        status.put("total", job.total);
+        status.put("completed", job.completed.get());
+        status.put("failed", job.failed.get());
+        status.put("message", job.message);
+        return status;
+    }
+
+    private void runJob(DocumentJob job, MultipartFile[] files, Authentication authentication) {
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(authentication);
+        SecurityContextHolder.setContext(context);
+        currentJob.set(job);
+        job.state = "RUNNING";
+        try {
+            Map<String, Object> result = indexDocuments(files);
+            if (job.stopRequested.get()) {
+                job.state = "STOPPED";
+            } else if (((Number) result.getOrDefault("failed", 0)).intValue() > 0) {
+                job.state = "FAILED";
+            } else {
+                job.state = "COMPLETED";
+            }
+            job.message = String.valueOf(result.getOrDefault("message", ""));
+        } catch (Exception e) {
+            job.state = job.stopRequested.get() ? "STOPPED" : "FAILED";
+            job.message = e.getMessage();
+            logger.error("Ошибка фоновой индексации документов пользователя {}", job.ownerId, e);
+        } finally {
+            currentJob.remove();
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @PreDestroy
+    void shutdownExecutor() {
+        documentExecutor.shutdownNow();
+    }
+
     /**
      * Индексирует пакет загруженных документов (DOCX/PDF). Обрабатывает файлы по очереди,
      * прерываясь при запросе остановки индексации, и возвращает сводный результат по каждому файлу.
@@ -90,9 +234,10 @@ public class DocumentIndexingService {
             for (MultipartFile file : files) {
                 String fileName = file != null ? file.getOriginalFilename() : null;
 
-                if (indexingState.isStopRequested()) {
+                if (shouldStop()) {
                     skipped++;
                     indexingState.itemFailed();
+                    updateJobProgress(false);
                     perFile.add(fileResult(fileName, false, "Пропущено: индексация остановлена"));
                     continue;
                 }
@@ -102,19 +247,21 @@ public class DocumentIndexingService {
                 if (Boolean.TRUE.equals(result.get("result"))) {
                     success++;
                     indexingState.itemCompleted();
+                    updateJobProgress(true);
                 } else {
                     failed++;
                     indexingState.itemFailed();
+                    updateJobProgress(false);
                 }
             }
         } finally {
             try {
                 Site finalDocumentsSite = getOrCreateDocumentsSite();
-                finalDocumentsSite.setStatus(indexingState.isStopRequested()
+                finalDocumentsSite.setStatus(shouldStop()
                         ? Status.STOPPED
                         : (failed > 0 ? Status.FAILED : Status.INDEXED));
                 finalDocumentsSite.setStatusTime(LocalDateTime.now());
-                finalDocumentsSite.setLastError(indexingState.isStopRequested()
+                finalDocumentsSite.setLastError(shouldStop()
                         ? "Индексация остановлена пользователем"
                         : (failed > 0 ? "Часть документов не была проиндексирована" : null));
                 siteRepository.save(finalDocumentsSite);
@@ -237,7 +384,7 @@ public class DocumentIndexingService {
     private void indexLemmas(Site site, Page page, String text) {
         Map<String, Integer> lemmaMap = lemmatizer.extractLemmasWithRank(text);
         for (Map.Entry<String, Integer> entry : lemmaMap.entrySet()) {
-            if (indexingState.isStopRequested()) {
+            if (shouldStop()) {
                 throw new IllegalStateException("Индексация остановлена пользователем");
             }
             String lemmaText = entry.getKey();
@@ -334,5 +481,69 @@ public class DocumentIndexingService {
         map.put("result", false);
         map.put("error", message);
         return map;
+    }
+
+    private boolean shouldStop() {
+        DocumentJob job = currentJob.get();
+        return indexingState.isStopRequested() || (job != null && job.stopRequested.get());
+    }
+
+    private void updateJobProgress(boolean successful) {
+        DocumentJob job = currentJob.get();
+        if (job == null) {
+            return;
+        }
+        if (successful) {
+            job.completed.incrementAndGet();
+        } else {
+            job.failed.incrementAndGet();
+        }
+    }
+
+    private static final class DocumentJob {
+        private final String id = UUID.randomUUID().toString();
+        private final String ownerId;
+        private final int total;
+        private final AtomicBoolean stopRequested = new AtomicBoolean(false);
+        private final AtomicInteger completed = new AtomicInteger();
+        private final AtomicInteger failed = new AtomicInteger();
+        private volatile String state = "QUEUED";
+        private volatile String message = "Ожидание запуска";
+
+        private DocumentJob(String ownerId, int total) {
+            this.ownerId = ownerId;
+            this.total = total;
+        }
+
+        private boolean isRunning() {
+            return "QUEUED".equals(state) || "RUNNING".equals(state) || "STOPPING".equals(state);
+        }
+    }
+
+    private static final class ByteArrayMultipartFile implements MultipartFile {
+        private final String name;
+        private final String originalFilename;
+        private final String contentType;
+        private final byte[] bytes;
+
+        private ByteArrayMultipartFile(String name, String originalFilename, String contentType, byte[] bytes) {
+            this.name = name;
+            this.originalFilename = originalFilename;
+            this.contentType = contentType;
+            this.bytes = bytes;
+        }
+
+        public String getName() { return name; }
+        public String getOriginalFilename() { return originalFilename; }
+        public String getContentType() { return contentType; }
+        public boolean isEmpty() { return bytes.length == 0; }
+        public long getSize() { return bytes.length; }
+        public byte[] getBytes() { return bytes.clone(); }
+        public InputStream getInputStream() { return new ByteArrayInputStream(bytes); }
+        public void transferTo(File dest) throws IOException {
+            try (FileOutputStream output = new FileOutputStream(dest)) {
+                output.write(bytes);
+            }
+        }
     }
 }

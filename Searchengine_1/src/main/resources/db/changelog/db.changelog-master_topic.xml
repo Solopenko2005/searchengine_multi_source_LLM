@@ -326,4 +326,29 @@
             <column name="owner_id"/>
         </createIndex>
     </changeSet>
+
+    <changeSet id="14" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="assistant_profile"/>
+            </not>
+        </preConditions>
+        <createTable tableName="assistant_profile">
+            <column name="id" type="BIGSERIAL" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="owner_id" type="VARCHAR(255)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uc_assistant_profile_owner"/>
+            </column>
+            <column name="instructions" type="TEXT" defaultValue="">
+                <constraints nullable="false"/>
+            </column>
+            <column name="document_ids" type="TEXT" defaultValue="">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
 </databaseChangeLog>

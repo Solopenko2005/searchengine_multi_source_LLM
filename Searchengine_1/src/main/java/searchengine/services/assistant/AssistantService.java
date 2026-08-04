@@ -52,6 +52,7 @@ public class AssistantService {
     private final TopicRepository topicRepository;
     private final LlmTopicAnalysisService llmTopicAnalysisService;
     private final CurrentUserService currentUserService;
+    private final AssistantProfileService profileService;
 
     private static final int MAX_TOPICS = 20;
 
@@ -80,7 +81,9 @@ public class AssistantService {
 
         // 1. Поиск релевантных документов
         String retrievalQuery = buildRetrievalQuery(question, request.getHistory());
-        List<RetrievedDoc> docs = retrieveContext(retrievalQuery, request.getSite(), request.getDocumentIds());
+        AssistantProfileService.ResolvedProfile profile = profileService.resolve(
+                request.getDocumentIds(), request.getProfileInstructions());
+        List<RetrievedDoc> docs = retrieveContext(retrievalQuery, request.getSite(), profile.getDocumentIds());
         List<AssistantSource> sources = docs.stream()
                 .map(d -> new AssistantSource(d.index, d.title, d.source, d.url, d.snippet))
                 .collect(Collectors.toList());
@@ -99,7 +102,7 @@ public class AssistantService {
         if (llmClient.isConfigured()) {
             try {
                 List<ChatMessage> messages = buildChatMessages(question, request.getHistory(), docs,
-                        request.getProfileInstructions());
+                        profile.getInstructions());
                 String answer = llmClient.complete(messages);
                 response.setResult(true);
                 response.setUsedLlm(true);
@@ -130,10 +133,19 @@ public class AssistantService {
     public TopicsSummaryResponse topics() {
         TopicsSummaryResponse response = new TopicsSummaryResponse();
         List<TopicItem> items = new ArrayList<>();
+        AssistantProfileService.ResolvedProfile profile = profileService.resolve(List.of(), "");
+        Set<Integer> selectedDocumentIds = new HashSet<>(profile.getDocumentIds());
+        if (selectedDocumentIds.isEmpty()) {
+            response.setResult(true);
+            response.setUsedLlm(false);
+            response.setSummary("Выберите хотя бы один документ в профиле ассистента.");
+            return response;
+        }
 
         if (llmClient.isConfigured()) {
             try {
-                Optional<LlmTopicAnalysisService.Analysis> analysis = llmTopicAnalysisService.analyze();
+                Optional<LlmTopicAnalysisService.Analysis> analysis = llmTopicAnalysisService.analyze(
+                        profile.getDocumentIds(), profile.getInstructions());
                 if (analysis.isPresent() && !analysis.get().getTopics().isEmpty()) {
                     response.setTopics(analysis.get().getTopics());
                     response.setSummary(analysis.get().getSummary());
@@ -164,6 +176,8 @@ public class AssistantService {
             for (TopicGroup group : filtered) {
                 List<Topic> accessibleTopics = topicRepository.findByTopicGroupId(group.getId()).stream()
                         .filter(topic -> currentUserService.canAccess(topic.getPage()))
+                        .filter(topic -> selectedDocumentIds.isEmpty()
+                                || selectedDocumentIds.contains(topic.getPage().getId()))
                         .collect(Collectors.toList());
                 if (accessibleTopics.isEmpty()) {
                     continue;
@@ -249,6 +263,9 @@ public class AssistantService {
 
     private List<RetrievedDoc> retrieveContext(String question, String site, List<Integer> documentIds) {
         List<RetrievedDoc> docs = new ArrayList<>();
+        if ((documentIds == null || documentIds.isEmpty()) && (site == null || site.isBlank())) {
+            return docs;
+        }
         int maxDocs = Math.max(1, config.getRag().getMaxDocuments());
         int maxChars = Math.max(200, config.getRag().getMaxCharsPerDocument());
         Set<Integer> allowedDocumentIds = documentIds == null

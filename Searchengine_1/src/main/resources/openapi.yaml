@@ -23,7 +23,7 @@ tags:
 
 paths:
   /api/startIndexing:
-    get:
+    post:
       tags:
         - "Индексация"
       summary: "Запуск полной индексации"
@@ -66,7 +66,7 @@ paths:
                     type: string
                     example: "Индексация уже запущена"
   /api/stopIndexing:
-    get:
+    post:
       tags:
         - "Индексация"
       summary: "Остановка текущей индексации"
@@ -325,3 +325,80 @@ paths:
                     type: string
                     example: "Задан пустой поисковый запрос"
 
+  /api/uploadDocument:
+    post:
+      tags: ["Индексация"]
+      summary: "Запустить фоновую индексацию PDF/DOCX"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  items: {type: string, format: binary}
+      responses:
+        '202':
+          description: "Файлы приняты"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result: {type: boolean}
+                  accepted: {type: boolean}
+                  jobId: {type: string, format: uuid}
+
+  /api/documents/indexing/status:
+    get:
+      tags: ["Индексация"]
+      summary: "Статус индексации документов текущего пользователя"
+      responses:
+        '200': {description: "Текущий прогресс и итоговый статус"}
+
+  /api/documents/indexing/stop:
+    post:
+      tags: ["Индексация"]
+      summary: "Остановить индексацию документов текущего пользователя"
+      responses:
+        '200': {description: "Остановка запрошена"}
+
+  /api/assistant/profile:
+    get:
+      tags: ["LLM"]
+      summary: "Получить профиль RAG текущего пользователя"
+      responses:
+        '200': {description: "Инструкции и выбранные документы"}
+    put:
+      tags: ["LLM"]
+      summary: "Сохранить профиль RAG текущего пользователя"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                instructions: {type: string, maxLength: 3000}
+                documentIds:
+                  type: array
+                  items: {type: integer}
+      responses:
+        '200': {description: "Профиль сохранён"}
+
+  /api/assistant/chat:
+    post:
+      tags: ["LLM"]
+      summary: "Ответить по выбранным документам через RAG"
+      responses:
+        '200': {description: "Ответ и ссылки на источники"}
+
+  /api/assistant/topics:
+    get:
+      tags: ["LLM"]
+      summary: "Определить тематики выбранных документов"
+      responses:
+        '200': {description: "Темы, уверенность и общий обзор"}

@@ -90,5 +90,8 @@ public class AssistantConfig {
 
         /** Сколько документов одновременно использовать при семантическом анализе тематик. */
         private int topicDocumentLimit = 30;
+
+        /** Minimum LLM confidence required to expose a detected topic. */
+        private double topicMinConfidence = 0.65;
     }
 }

@@ -16,6 +16,10 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * Клиент OpenAI Responses API. Секрет читается только из конфигурации/переменной
@@ -68,6 +72,7 @@ public class LlmClient {
         body.put("model", llm.getModel());
         body.put("store", false);
         body.put("max_output_tokens", Math.max(128, llm.getMaxOutputTokens()));
+        safetyIdentifier().ifPresent(value -> body.put("safety_identifier", value));
 
         if (hasText(llm.getReasoningEffort())) {
             body.put("reasoning", Map.of("effort", llm.getReasoningEffort()));
@@ -237,6 +242,25 @@ public class LlmClient {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private java.util.Optional<String> safetyIdentifier() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()
+                || !hasText(authentication.getName()) || "anonymousUser".equals(authentication.getName())) {
+            return java.util.Optional.empty();
+        }
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(authentication.getName().getBytes(StandardCharsets.UTF_8));
+            StringBuilder value = new StringBuilder("usr_");
+            for (int i = 0; i < 16; i++) {
+                value.append(String.format("%02x", digest[i]));
+            }
+            return java.util.Optional.of(value.toString());
+        } catch (Exception e) {
+            return java.util.Optional.empty();
+        }
     }
 
     public static class LlmException extends RuntimeException {

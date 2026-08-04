@@ -2,6 +2,7 @@ package searchengine.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import searchengine.dto.response.IndexingResponse;
@@ -49,8 +50,21 @@ public class IndexingController {
      * как самостоятельные источники информации.
      */
     @PostMapping(value = "/uploadDocument", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public Map<String, Object> uploadDocument(@RequestParam("files") MultipartFile[] files) {
-        return documentIndexingService.indexDocuments(files);
+    public ResponseEntity<Map<String, Object>> uploadDocument(@RequestParam("files") MultipartFile[] files) {
+        Map<String, Object> result = documentIndexingService.submitDocuments(files);
+        return Boolean.TRUE.equals(result.get("result"))
+                ? ResponseEntity.accepted().body(result)
+                : ResponseEntity.badRequest().body(result);
+    }
+
+    @PostMapping("/documents/indexing/stop")
+    public Map<String, Object> stopDocumentIndexing() {
+        return documentIndexingService.stopCurrentUserJob();
+    }
+
+    @GetMapping("/documents/indexing/status")
+    public Map<String, Object> documentIndexingStatus() {
+        return documentIndexingService.currentUserStatus();
     }
 
     @GetMapping("/indexing/status")

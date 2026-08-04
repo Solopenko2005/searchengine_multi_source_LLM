@@ -141,6 +141,10 @@ p.error-browser
                                     </div>
                                     <div class="form-hint">Можно выбрать сразу несколько файлов</div>
                                 </form>
+                                <div class="DocumentIndexing-state">
+                                    <span class="IndexStatus IndexStatus_pending" id="documentIndexingStatus">Документы: ожидание</span>
+                                    <button class="btn" type="button" id="stopDocumentIndexing" disabled>Остановить документы</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -194,6 +198,8 @@ p.error-browser
                                     <strong>Документы в текущей рабочей области</strong>
                                     <div id="assistantDocuments">Загрузка списка документов…</div>
                                 </div>
+                                <button class="btn btn_primary" type="button" id="assistantProfileSave">Сохранить профиль</button>
+                                <span id="assistantProfileState"></span>
                             </details>
 
                             <div class="Assistant-topics">
@@ -232,6 +238,9 @@ p.error-browser
     .Assistant-profile textarea { box-sizing: border-box; width: 100%; resize: vertical; padding: 8px; border: 1px solid #cdd3dd; border-radius: 6px; }
     .Assistant-documentScope { margin-top: 10px; font-size: 13px; }
     .Assistant-documentScope label { display: inline-flex; align-items: center; gap: 5px; margin: 6px 12px 0 0; }
+    .DocumentIndexing-state { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    #assistantProfileSave { margin-top: 10px; }
+    #assistantProfileState { margin-left: 8px; font-size: 13px; color: #52606d; }
     .IndexStatus { display: inline-block; margin-left: 12px; padding: 6px 10px; border-radius: 16px; font-size: 13px; font-weight: 600; }
     .IndexStatus_ready { background: #e3f5e8; color: #18723a; }
     .IndexStatus_working { background: #e7f0ff; color: #285fac; }
@@ -281,6 +290,10 @@ p.error-browser
     var profileEl = document.getElementById('assistantProfile');
     var documentsEl = document.getElementById('assistantDocuments');
     var indexingBadgeEl = document.getElementById('indexingStatusBadge');
+    var documentIndexingEl = document.getElementById('documentIndexingStatus');
+    var stopDocumentIndexingEl = document.getElementById('stopDocumentIndexing');
+    var profileSaveEl = document.getElementById('assistantProfileSave');
+    var profileStateEl = document.getElementById('assistantProfileState');
     var history = [];
 
     if (!formEl) { return; }
@@ -310,10 +323,26 @@ p.error-browser
             .map(function (checkbox) { return Number(checkbox.value); });
     }
 
-    profileEl.value = localStorage.getItem('assistantProfile') || '';
-    profileEl.addEventListener('change', function () {
-        localStorage.setItem('assistantProfile', profileEl.value);
-    });
+    function saveProfile() {
+        profileStateEl.textContent = 'Сохранение…';
+        return fetch(API + '/assistant/profile', {
+            method: 'PUT',
+            headers: jsonHeaders(),
+            body: JSON.stringify({
+                instructions: profileEl.value,
+                documentIds: selectedDocumentIds()
+            })
+        }).then(function (r) {
+            if (!r.ok) { throw new Error('HTTP ' + r.status); }
+            return r.json();
+        }).then(function () {
+            profileStateEl.textContent = 'Профиль сохранён';
+        }).catch(function (e) {
+            profileStateEl.textContent = 'Ошибка сохранения: ' + e.message;
+            throw e;
+        });
+    }
+    profileSaveEl.addEventListener('click', saveProfile);
 
     function scrollDown() { messagesEl.scrollTop = messagesEl.scrollHeight; }
 
@@ -445,6 +474,16 @@ p.error-browser
                 return '<label><input type="checkbox" value="' + Number(doc.id) + '" checked> ' +
                     esc(doc.name) + '</label>';
             }).join('');
+            return fetch(API + '/assistant/profile');
+        })
+        .then(function (r) { return r && r.json ? r.json() : null; })
+        .then(function (profile) {
+            if (!profile) { return; }
+            profileEl.value = profile.instructions || '';
+            var selected = profile.documentIds || [];
+            Array.prototype.forEach.call(documentsEl.querySelectorAll('input[type=checkbox]'), function (box) {
+                box.checked = selected.indexOf(Number(box.value)) >= 0;
+            });
         })
         .catch(function () { documentsEl.textContent = 'Не удалось получить список документов.'; });
 
@@ -463,11 +502,36 @@ p.error-browser
     refreshIndexingStatus();
     window.setInterval(refreshIndexingStatus, 3000);
 
+    function refreshDocumentIndexingStatus() {
+        fetch(API + '/documents/indexing/status')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || !documentIndexingEl) { return; }
+                var progress = data.total ? (' ' + (data.completed || 0) + '/' + data.total) : '';
+                documentIndexingEl.textContent = 'Документы: ' + (data.state || 'IDLE') + progress;
+                documentIndexingEl.className = 'IndexStatus ' + (data.inProgress
+                    ? 'IndexStatus_working'
+                    : (data.state === 'FAILED' || data.state === 'STOPPED'
+                        ? 'IndexStatus_error'
+                        : (data.ready ? 'IndexStatus_ready' : 'IndexStatus_pending')));
+                stopDocumentIndexingEl.disabled = !data.inProgress;
+            });
+    }
+    stopDocumentIndexingEl.addEventListener('click', function () {
+        fetch(API + '/documents/indexing/stop', { method: 'POST', headers: jsonHeaders() })
+            .then(function (r) { return r.json(); })
+            .then(refreshDocumentIndexingStatus);
+    });
+    refreshDocumentIndexingStatus();
+    window.setInterval(refreshDocumentIndexingStatus, 2000);
+
     // Популярные тематики
     topicsBtn.addEventListener('click', function () {
         topicsBtn.disabled = true;
         topicsBody.innerHTML = '<p class="Assistant-typing">Анализирую документы...</p>';
-        fetch(API + '/assistant/topics')
+        saveProfile().catch(function () {}).then(function () {
+            return fetch(API + '/assistant/topics');
+        })
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (!data || !data.result) {
@@ -481,8 +545,10 @@ p.error-browser
                 if (data.topics && data.topics.length) {
                     html += '<ul class="Assistant-topics-list">';
                     data.topics.forEach(function (t) {
+                        var confidence = t.confidence ? (' · уверенность ' + Math.round(t.confidence * 100) + '%') : '';
                         html += '<li><span class="theme">' + t.rank + '. ' + esc(t.theme) + '</span>' +
-                            '<span class="meta">частота ' + t.frequency + ' · источников ' + t.mentions + '</span></li>';
+                            '<span class="meta">частота ' + t.frequency + ' · источников ' + t.mentions + confidence + '</span></li>';
+                        if (t.description) { html += '<li><span>' + esc(t.description) + '</span></li>'; }
                     });
                     html += '</ul>';
                 } else {

@@ -74,6 +74,8 @@ mvn spring-boot:run
 - `POST /api/addSite` — добавить и индексировать сайт (ADMIN);
 - `POST /api/indexPage` — переиндексировать страницу (ADMIN);
 - `POST /api/uploadDocument` — загрузить PDF/DOCX (любой аутентифицированный пользователь);
+- `GET /api/documents/indexing/status` — прогресс фоновой индексации документов текущего пользователя;
+- `POST /api/documents/indexing/stop` — остановить только свою документную задачу;
 - `GET /api/documents` — документы текущего пользователя;
 - `GET /documents/{id}?query=...` — безопасный HTML-просмотр с подсветкой лемм.
 
@@ -86,10 +88,11 @@ mvn spring-boot:run
 ```text
 SECURITY_MODE=jwt
 AUTH_ISSUER_URI=https://auth.example.com/realms/search
+AUTH_AUDIENCE=search-engine-api
 CORS_ALLOWED_ORIGINS=https://search.example.com
 ```
 
-Сервис авторизации должен выдавать JWT с корректным `iss`, стабильным `sub` и массивом ролей в claim `roles`, например `["USER"]` или `["ADMIN"]`. Если discovery недоступен, задайте `AUTH_JWK_SET_URI`. TLS должен завершаться на reverse proxy; наружу не следует публиковать PostgreSQL и внутренние административные порты.
+Сервис авторизации должен выдавать JWT с корректными `iss` и `aud`, стабильным `sub` и массивом ролей в claim `roles`, например `["USER"]` или `["ADMIN"]`. Имена claims можно изменить через `AUTH_PRINCIPAL_CLAIM` и `AUTH_ROLES_CLAIM`. Если discovery недоступен, задайте `AUTH_JWK_SET_URI`. TLS должен завершаться на reverse proxy; наружу не следует публиковать PostgreSQL и внутренние административные порты.
 
 ## Проверка перед публикацией
 

@@ -5,7 +5,10 @@ import org.springframework.web.bind.annotation.*;
 import searchengine.dto.assistant.AssistantChatResponse;
 import searchengine.dto.assistant.ChatRequest;
 import searchengine.dto.assistant.TopicsSummaryResponse;
+import searchengine.dto.assistant.AssistantProfileRequest;
+import searchengine.dto.assistant.AssistantProfileResponse;
 import searchengine.services.assistant.AssistantService;
+import searchengine.services.assistant.AssistantProfileService;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -24,6 +27,7 @@ import java.util.Map;
 public class AssistantController {
 
     private final AssistantService assistantService;
+    private final AssistantProfileService profileService;
 
     @PostMapping("/chat")
     public AssistantChatResponse chat(@RequestBody ChatRequest request) {
@@ -43,5 +47,15 @@ public class AssistantController {
         map.put("provider", "OpenAI");
         map.put("model", assistantService.getLlmModel());
         return map;
+    }
+
+    @GetMapping("/profile")
+    public AssistantProfileResponse profile() {
+        return profileService.get();
+    }
+
+    @PutMapping("/profile")
+    public AssistantProfileResponse saveProfile(@RequestBody AssistantProfileRequest request) {
+        return profileService.save(request);
     }
 }
