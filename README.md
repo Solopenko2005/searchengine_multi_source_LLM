@@ -24,9 +24,18 @@ Java 17, Spring Boot 2.7.18, Spring Security, Spring Data JPA, PostgreSQL, Liqui
 ## Быстрый запуск
 
 1. Создайте PostgreSQL-базу, например `search_engine`.
-2. Задайте переменные окружения. Пример полного набора находится в `.env.example`.
+2. Создайте локальный файл `.env` из примера и укажите в нём реальные параметры. Файл `.env` исключён из Git и автоматически читается приложением как при запуске из корня репозитория, так и из каталога `Searchengine_1`.
 
 PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
+
+В `DB_PASSWORD` должен находиться настоящий пароль пользователя PostgreSQL, заданный при установке или создании пользователя. Значение `change-me` из примера работать не будет. Переменные окружения операционной системы по-прежнему можно использовать — они имеют приоритет над `.env`.
+
+Пример переменных для PowerShell без файла `.env`:
 
 ```powershell
 $env:DB_URL="jdbc:postgresql://localhost:5432/search_engine"
@@ -36,7 +45,7 @@ $env:APP_ADMIN_PASSWORD="change-me-too"
 $env:OPENAI_API_KEY="your-api-key"
 ```
 
-Bash:
+Пример для Bash:
 
 ```bash
 export DB_URL='jdbc:postgresql://localhost:5432/search_engine'
@@ -55,6 +64,18 @@ mvn spring-boot:run
 ```
 
 Откройте [http://localhost:8080](http://localhost:8080) и войдите как `admin` (либо именем из `APP_ADMIN_USERNAME`). Если пароль не задан, одноразовый временный пароль выводится в лог при запуске.
+
+### Запуск из IntelliJ IDEA
+
+Запускайте класс `SearchEngineApplication` с рабочим каталогом `Searchengine_1`. Дописывать секреты в конфигурацию IDEA не требуется: приложение прочитает `.env` из корня репозитория. Альтернативный вариант — указать `DB_URL`, `DB_USERNAME` и `DB_PASSWORD` в поле **Environment variables** конфигурации запуска.
+
+Ошибка `The server requested SCRAM-based authentication, but no password was provided` означает, что `DB_PASSWORD` отсутствует. Если пароль PostgreSQL забыт, задайте новый через pgAdmin либо выполните от имени администратора БД:
+
+```sql
+ALTER USER postgres WITH PASSWORD 'новый-надежный-пароль';
+```
+
+Затем запишите этот пароль только в локальный `.env`. Не добавляйте `.env` в Git.
 
 ## OpenAI
 
