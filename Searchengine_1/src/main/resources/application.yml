@@ -60,12 +60,6 @@ spring:
 
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master_topic.xml  # Файл с миграциями
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${AUTH_ISSUER_URI:}
-          jwk-set-uri: ${AUTH_JWK_SET_URI:}
 # Настройки LLM-ассистента (вкладка «Ассистент»), использующего OpenAI Responses API.
 # Ключ и модель задаются только через переменные окружения.
 # Если ключ не задан — ассистент работает в резервном режиме
@@ -98,6 +92,8 @@ app:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:8080}
     assistant-rate-limit-per-minute: ${ASSISTANT_RATE_LIMIT_PER_MINUTE:30}
     jwt:
+      issuer-uri: ${AUTH_ISSUER_URI:}
+      jwk-set-uri: ${AUTH_JWK_SET_URI:}
       audience: ${AUTH_AUDIENCE:}
       authorities-claim: ${AUTH_ROLES_CLAIM:roles}
       principal-claim: ${AUTH_PRINCIPAL_CLAIM:sub}

@@ -125,8 +125,8 @@ public final class SecurityConfig {
         }
 
         @Bean
-        JwtDecoder jwtDecoder(@Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri:}") String issuerUri,
-                              @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri:}") String jwkSetUri,
+        JwtDecoder jwtDecoder(@Value("${app.security.jwt.issuer-uri:}") String issuerUri,
+                              @Value("${app.security.jwt.jwk-set-uri:}") String jwkSetUri,
                               @Value("${app.security.jwt.audience:}") String audience) {
             JwtDecoder decoder;
             if (jwkSetUri != null && !jwkSetUri.isBlank()) {
