@@ -9,12 +9,14 @@
 <!--[if IE 9]>
 <html class="ie9" lang="ru">
 <![endif]-->
-<!--[if gt IE 9]><!--> <html lang="ru"> <!--<![endif]-->
+<!--[if gt IE 9]><!--> <html lang="ru" xmlns:th="http://www.thymeleaf.org"> <!--<![endif]-->
 <head>
     <title>Site Search Engine</title>
     <meta name="description" content="Site Search Engine">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
     <!--meta( http-equiv="cache-control" content="no-cache")-->
     <!--meta( http-equiv="expires" content="0")-->
     <!--link(rel="preload" href="assets/css/extra.min.css?v=" + version as="style" crossorigin="anonymous")-->
@@ -25,14 +27,16 @@
     <link rel="preload" href="/assets/fonts/Montserrat/Montserrat-ExtraBold.woff2" as="font" crossorigin="anonymous">
     <link rel="stylesheet" href="/assets/css/fonts.css?v=82368483">
     <link rel="stylesheet" href="/assets/css/basic.css?v=82368483">
-    <link rel="stylesheet" href="/assets/css/extra.css?v=82368483"><!--[if lt IE 9]>
+    <link rel="stylesheet" href="/assets/css/extra.css?v=82368483">
+    <link rel="stylesheet" href="/assets/css/indexing-jobs.css?v=20260807-2"><!--[if lt IE 9]>
     <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
 
     <script>
         var backendApiUrl = 'api'
     </script>
 
-    <script defer src="/assets/js/scripts.js?v=38874865"></script>
+    <script defer src="/assets/js/scripts.js?v=20260805-csrf-fix"></script>
+    <script defer src="/assets/js/indexing-jobs.js?v=20260807-2"></script>
 
 </head>
 <body class="Site">
@@ -141,11 +145,41 @@ p.error-browser
                                     </div>
                                     <div class="form-hint">Можно выбрать сразу несколько файлов</div>
                                 </form>
-                                <div class="DocumentIndexing-state">
-                                    <span class="IndexStatus IndexStatus_pending" id="documentIndexingStatus">Документы: ожидание</span>
-                                    <button class="btn" type="button" id="stopDocumentIndexing" disabled>Остановить документы</button>
-                                </div>
                             </div>
+                            <section class="IndexingQueue" id="indexingQueue" aria-labelledby="indexingQueueTitle">
+                                <header class="IndexingQueue-header">
+                                    <div>
+                                        <h3 class="IndexingQueue-title" id="indexingQueueTitle">Ход индексации</h3>
+                                        <p class="IndexingQueue-lead">Уже обработанные страницы доступны в поиске, даже пока источник ещё индексируется.</p>
+                                    </div>
+                                    <button class="IndexingQueue-stopAll" id="indexingStopAll" type="button" disabled>
+                                        Остановить все
+                                    </button>
+                                </header>
+                                <div class="IndexingQueue-summary" aria-live="polite">
+                                    <div class="IndexingQueue-card"><span>Всего</span><strong id="indexingTotal">0</strong></div>
+                                    <div class="IndexingQueue-card IndexingQueue-card_active"><span>В работе</span><strong id="indexingActive">0</strong></div>
+                                    <div class="IndexingQueue-card IndexingQueue-card_ready"><span>Завершено</span><strong id="indexingCompleted">0</strong></div>
+                                    <div class="IndexingQueue-card IndexingQueue-card_problem"><span>Требуют внимания</span><strong id="indexingProblems">0</strong></div>
+                                </div>
+                                <div class="IndexingQueue-overall">
+                                    <div class="IndexingQueue-overallText">
+                                        <span>Общий прогресс активных заданий</span><strong id="indexingOverallText">0%</strong>
+                                    </div>
+                                    <div class="IndexingQueue-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                                        <span id="indexingOverallBar"></span>
+                                    </div>
+                                </div>
+                                <div class="IndexingQueue-tableWrap">
+                                    <table class="IndexingQueue-table">
+                                        <thead><tr><th>Источник</th><th>Состояние</th><th>Прогресс</th><th>Доступно в поиске</th><th></th></tr></thead>
+                                        <tbody id="indexingJobsBody">
+                                            <tr><td class="IndexingQueue-empty" colspan="5">Задания индексации пока не запускались</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p class="IndexingQueue-updated" id="indexingUpdated"></p>
+                            </section>
                         </div>
                     </div>
                     <div class="Tabs-block" id="search">
@@ -313,8 +347,11 @@ p.error-browser
 
     function jsonHeaders() {
         var headers = { 'Content-Type': 'application/json' };
-        var token = cookie('XSRF-TOKEN');
-        if (token) { headers['X-XSRF-TOKEN'] = token; }
+        var tokenMeta = document.querySelector('meta[name="_csrf"]');
+        var headerMeta = document.querySelector('meta[name="_csrf_header"]');
+        var token = tokenMeta ? tokenMeta.getAttribute('content') : cookie('XSRF-TOKEN');
+        var header = headerMeta ? headerMeta.getAttribute('content') : 'X-XSRF-TOKEN';
+        if (token) { headers[header] = token; }
         return headers;
     }
 
@@ -453,10 +490,11 @@ p.error-browser
         .then(function (r) { return r.json(); })
         .then(function (data) {
             if (data && data.llmConfigured) {
-                statusEl.textContent = 'OpenAI подключён: ' + (data.model || 'модель не указана') + '. Ответы строятся по выбранным документам.';
+                var provider = data.provider || 'LLM';
+                statusEl.textContent = provider + ' подключён: ' + (data.model || 'модель не указана') + '. Ответы строятся по выбранным документам.';
             } else {
                 statusEl.className = 'Assistant-status Assistant-status_warn';
-                statusEl.textContent = 'OpenAI API не подключён: ассистент работает в локальном режиме. Укажите OPENAI_API_KEY для развёрнутых ответов и LLM-анализа тематик.';
+                statusEl.textContent = 'LLM не подключена: ассистент работает в резервном режиме. Проверьте настройки модели и API для развёрнутых ответов и LLM-анализа тематик.';
             }
         })
         .catch(function () {
@@ -517,13 +555,15 @@ p.error-browser
                 stopDocumentIndexingEl.disabled = !data.inProgress;
             });
     }
-    stopDocumentIndexingEl.addEventListener('click', function () {
-        fetch(API + '/documents/indexing/stop', { method: 'POST', headers: jsonHeaders() })
-            .then(function (r) { return r.json(); })
-            .then(refreshDocumentIndexingStatus);
-    });
-    refreshDocumentIndexingStatus();
-    window.setInterval(refreshDocumentIndexingStatus, 2000);
+    if (stopDocumentIndexingEl) {
+        stopDocumentIndexingEl.addEventListener('click', function () {
+            fetch(API + '/documents/indexing/stop', { method: 'POST', headers: jsonHeaders() })
+                .then(function (r) { return r.json(); })
+                .then(refreshDocumentIndexingStatus);
+        });
+        refreshDocumentIndexingStatus();
+        window.setInterval(refreshDocumentIndexingStatus, 2000);
+    }
 
     // Популярные тематики
     topicsBtn.addEventListener('click', function () {

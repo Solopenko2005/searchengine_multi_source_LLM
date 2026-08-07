@@ -44,7 +44,7 @@ public class AssistantController {
         Map<String, Object> map = new HashMap<>();
         map.put("result", true);
         map.put("llmConfigured", assistantService.isLlmConfigured());
-        map.put("provider", "OpenAI");
+        map.put("provider", assistantService.getLlmProvider());
         map.put("model", assistantService.getLlmModel());
         return map;
     }

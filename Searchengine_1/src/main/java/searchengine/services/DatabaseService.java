@@ -16,6 +16,12 @@ import searchengine.repository.SiteRepository;
 
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -66,32 +72,23 @@ public class DatabaseService {
         }
     }
 
-    @Transactional(rollbackFor = Exception.class, timeout = 5)
+    @Transactional(rollbackFor = Exception.class, timeout = 30)
     public void savePage(Page page) {
-        if (indexingState.isStopRequested()) {
-            throw new RuntimeException("Индексация прервана");
+        if (page.getId() == null) {
+            entityManager.persist(page);
+        } else {
+            entityManager.merge(page);
         }
-        entityManager.persist(page);
         entityManager.flush();
-        entityManager.clear();
     }
 
     @Transactional
     public Lemma saveLemma(String lemmaText, Site site) {
-        Optional<Lemma> optionalLemma = lemmaRepository.findByLemmaAndSite(lemmaText, site);
-
-        Lemma lemma;
-        if (optionalLemma.isPresent()) {
-            lemma = optionalLemma.get();
-            lemma.setFrequency(lemma.getFrequency() + 1);
-        } else {
-            lemma = new Lemma();
-            lemma.setLemma(lemmaText);
-            lemma.setFrequency(1);
-            lemma.setSite(site);
-        }
-
-        return lemmaRepository.save(lemma);
+        // PostgreSQL upsert делает параллельную индексацию страниц одного сайта безопасной:
+        // два потока больше не пытаются одновременно создать одну и ту же лемму.
+        lemmaRepository.upsertLemma(lemmaText, site.getId());
+        return lemmaRepository.findByLemmaAndSiteId(lemmaText, site.getId())
+                .orElseThrow(() -> new IllegalStateException("Не удалось сохранить лемму: " + lemmaText));
     }
 
     @Transactional
@@ -104,5 +101,62 @@ public class DatabaseService {
             logger.error("Ошибка доступа к данным при сохранении SearchIndex: {}", e.getMessage(), e);
             throw e;
         }
+    }
+
+    /**
+     * Writes all lemmas and search ranks for a page in two JDBC batches instead of
+     * issuing several SQL statements for every individual word.
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int savePageSearchIndex(Page page, Site site, Map<String, Integer> lemmaRanks) {
+        if (page == null || page.getId() == null || site == null || lemmaRanks == null || lemmaRanks.isEmpty()) {
+            return 0;
+        }
+
+        Map<String, Integer> validRanks = new LinkedHashMap<>();
+        lemmaRanks.forEach((lemma, rank) -> {
+            if (lemma != null && !lemma.isBlank() && lemma.length() <= 255 && rank != null) {
+                validRanks.put(lemma, rank);
+            }
+        });
+        if (validRanks.isEmpty()) return 0;
+
+        List<Map.Entry<String, Integer>> entries = new ArrayList<>(validRanks.entrySet());
+        entries.sort(Map.Entry.comparingByKey());
+        jdbcTemplate.batchUpdate(
+                "INSERT INTO lemma (lemma, site_id, frequency) VALUES (?, ?, 1) " +
+                        "ON CONFLICT (lemma, site_id) DO UPDATE SET frequency = lemma.frequency + 1",
+                new org.springframework.jdbc.core.BatchPreparedStatementSetter() {
+                    @Override
+                    public void setValues(PreparedStatement statement, int index) throws SQLException {
+                        statement.setString(1, entries.get(index).getKey());
+                        statement.setInt(2, site.getId());
+                    }
+
+                    @Override
+                    public int getBatchSize() {
+                        return entries.size();
+                    }
+                });
+
+        jdbcTemplate.batchUpdate(
+                "INSERT INTO search_index (page_id, lemma_id, ranking) " +
+                        "SELECT ?, id, ? FROM lemma WHERE site_id = ? AND lemma = ?",
+                new org.springframework.jdbc.core.BatchPreparedStatementSetter() {
+                    @Override
+                    public void setValues(PreparedStatement statement, int index) throws SQLException {
+                        Map.Entry<String, Integer> entry = entries.get(index);
+                        statement.setInt(1, page.getId());
+                        statement.setFloat(2, entry.getValue().floatValue());
+                        statement.setInt(3, site.getId());
+                        statement.setString(4, entry.getKey());
+                    }
+
+                    @Override
+                    public int getBatchSize() {
+                        return entries.size();
+                    }
+                });
+        return entries.size();
     }
 }

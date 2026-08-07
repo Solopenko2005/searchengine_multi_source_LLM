@@ -3,6 +3,7 @@ package searchengine.config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -49,13 +50,14 @@ public final class SecurityConfig {
 
     private static void authorize(HttpSecurity http) throws Exception {
         http.authorizeRequests(authorize -> authorize
-                .antMatchers("/login", "/assets/**", "/error").permitAll()
+                .antMatchers("/login", "/register", "/assets/**", "/error").permitAll()
                 .antMatchers(HttpMethod.GET, "/", "/api/statistics", "/api/search",
                         "/api/assistant/**", "/api/documents/**", "/documents/**",
-                        "/api/indexing/status").authenticated()
+                        "/api/indexing/status", "/api/indexing/jobs").authenticated()
                 .antMatchers(HttpMethod.POST, "/api/assistant/chat").authenticated()
                 .antMatchers(HttpMethod.POST, "/api/uploadDocument").authenticated()
                 .antMatchers(HttpMethod.POST, "/api/documents/indexing/stop").authenticated()
+                .antMatchers(HttpMethod.POST, "/api/indexing/jobs/*/stop", "/api/indexing/jobs/stop-all").authenticated()
                 .antMatchers(HttpMethod.PUT, "/api/assistant/profile").authenticated()
                 .antMatchers("/api/**").hasRole("ADMIN")
                 .anyRequest().authenticated());
@@ -69,11 +71,18 @@ public final class SecurityConfig {
         @Bean
         SecurityFilterChain basicFilterChain(HttpSecurity http,
                                              CorsConfigurationSource corsConfigurationSource,
-                                             AssistantRateLimitFilter assistantRateLimitFilter) throws Exception {
+                                             AssistantRateLimitFilter assistantRateLimitFilter,
+                                             ObjectProvider<ExternalAuthAuthenticationProvider> externalAuthProvider) throws Exception {
             authorize(http);
+            externalAuthProvider.ifAvailable(http::authenticationProvider);
             http.cors().configurationSource(corsConfigurationSource).and()
                     .csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
-                    .formLogin().and()
+                    .formLogin(form -> form
+                            .loginPage("/login")
+                            .loginProcessingUrl("/login")
+                            .defaultSuccessUrl("/", true)
+                            .failureUrl("/login?error")
+                            .permitAll())
                     .httpBasic();
             http.addFilterAfter(assistantRateLimitFilter, AnonymousAuthenticationFilter.class);
             return http.build();
@@ -85,6 +94,7 @@ public final class SecurityConfig {
         }
 
         @Bean
+        @ConditionalOnProperty(name = "app.security.external-auth-enabled", havingValue = "false", matchIfMissing = true)
         UserDetailsService users(PasswordEncoder encoder,
                                  @Value("${app.security.admin-username:admin}") String username,
                                  @Value("${app.security.admin-password:}") String configuredPassword) {

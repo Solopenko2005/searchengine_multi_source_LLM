@@ -7,6 +7,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
+import org.springframework.jdbc.core.JdbcTemplate;
 import searchengine.config.IndexingState;
 import searchengine.model.*;
 import searchengine.repository.*;
@@ -35,6 +36,7 @@ public class PageProcessor {
     private final IndexingState indexingState;
     private final TopicGroupingService topicGroupingService; // ДОБАВЛЕНО
     private final TopicGroupRepository topicGroupRepository; // ДОБАВЛЕНО (опционально)
+    private final JdbcTemplate jdbcTemplate;
 
     private final AtomicBoolean isIndexingStopped = new AtomicBoolean(false);
 
@@ -401,27 +403,16 @@ public class PageProcessor {
         logger.info("Удаление информации о странице: {}", page.getPath());
 
         try {
-            // 1. Удаляем связанные темы
-            topicRepository.deleteByPageId(page.getId());
-            logger.debug("Удалены темы для страницы: {}", page.getPath());
-
-            // 2. Удаляем индексы и обновляем леммы
-            List<SearchIndex> indexes = indexRepository.findByPage(page);
-            for (SearchIndex index : indexes) {
-                Lemma lemma = index.getLemma();
-                lemma.setFrequency(Math.max(0, lemma.getFrequency() - 1));
-
-                if (lemma.getFrequency() == 0) {
-                    lemmaRepository.delete(lemma);
-                } else {
-                    lemmaRepository.save(lemma);
-                }
-
-                indexRepository.delete(index);
-            }
-
-            // 3. Удаляем саму страницу
-            pageRepository.delete(page);
+            int pageId = page.getId();
+            int siteId = page.getSite().getId();
+            jdbcTemplate.update("DELETE FROM topic_lemma WHERE topic_id IN " +
+                    "(SELECT id FROM topic WHERE page_id = ?)", pageId);
+            jdbcTemplate.update("DELETE FROM topic WHERE page_id = ?", pageId);
+            jdbcTemplate.update("UPDATE lemma SET frequency = GREATEST(0, frequency - 1) " +
+                    "WHERE id IN (SELECT lemma_id FROM search_index WHERE page_id = ?)", pageId);
+            jdbcTemplate.update("DELETE FROM search_index WHERE page_id = ?", pageId);
+            jdbcTemplate.update("DELETE FROM lemma WHERE site_id = ? AND frequency <= 0", siteId);
+            jdbcTemplate.update("DELETE FROM page WHERE id = ?", pageId);
 
             logger.info("Информация о странице полностью удалена: {}", page.getPath());
 

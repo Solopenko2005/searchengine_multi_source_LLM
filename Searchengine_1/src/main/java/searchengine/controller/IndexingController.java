@@ -9,6 +9,8 @@ import searchengine.dto.response.IndexingResponse;
 import searchengine.services.DocumentIndexingService;
 import searchengine.services.SiteIndexingService;
 import searchengine.services.IndexingStatusService;
+import searchengine.services.IndexingJobService;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RequiredArgsConstructor
@@ -18,6 +20,7 @@ public class IndexingController {
     private final SiteIndexingService siteIndexingService;
     private final DocumentIndexingService documentIndexingService;
     private final IndexingStatusService indexingStatusService;
+    private final IndexingJobService indexingJobService;
 
     @PostMapping("/startIndexing")
     public Map<String, Object> startIndexing() {
@@ -70,5 +73,30 @@ public class IndexingController {
     @GetMapping("/indexing/status")
     public Map<String, Object> indexingStatus() {
         return indexingStatusService.getStatus();
+    }
+
+    @GetMapping("/indexing/jobs")
+    public Map<String, Object> indexingJobs() {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("result", true);
+        response.put("summary", indexingJobService.summary());
+        response.put("jobs", indexingJobService.listVisible());
+        return response;
+    }
+
+    @PostMapping("/indexing/jobs/{jobId}/stop")
+    public ResponseEntity<Map<String, Object>> stopJob(@PathVariable String jobId) {
+        boolean stopped = indexingJobService.requestStop(jobId);
+        Map<String, Object> body = stopped
+                ? Map.of("result", true, "message", "Остановка задания запрошена")
+                : Map.of("result", false, "error", "Активное задание не найдено или недоступно");
+        return stopped ? ResponseEntity.ok(body) : ResponseEntity.badRequest().body(body);
+    }
+
+    @PostMapping("/indexing/jobs/stop-all")
+    public Map<String, Object> stopAllJobs() {
+        int count = indexingJobService.requestStopAllVisible();
+        return Map.of("result", true, "stopped", count,
+                "message", count > 0 ? "Остановка заданий запрошена" : "Активных заданий нет");
     }
 }

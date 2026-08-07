@@ -12,7 +12,7 @@ import java.util.Optional;
 import java.util.List;
 
 @Repository
-public interface PageRepository extends JpaRepository<Page, Long> {
+public interface PageRepository extends JpaRepository<Page, Integer> {
     int countBySite(Site site);
 
     boolean existsBySiteAndPath(Site site, String path);

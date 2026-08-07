@@ -1,6 +1,7 @@
 package searchengine.services.assistant;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import searchengine.dto.assistant.ChatMessage;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,8 +29,10 @@ class LlmClientTest {
 
     @Test
     void parsesResponsesApiOutputText() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
         server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/responses", exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             String response = """
                     {"status":"completed","output":[{"type":"message","content":[
                     {"type":"output_text","text":"Ответ [1]"}]}]}
@@ -54,6 +58,47 @@ class LlmClientTest {
 
         assertThat(result).isEqualTo("Ответ [1]");
         assertThat(client.isConfigured()).isTrue();
+        assertThat(new ObjectMapper().readTree(requestBody.get())
+                .path("text").path("format").path("type").asText()).isEqualTo("text");
+    }
+
+    @Test
+    void localStructuredRequestIncludesSchemaInInstructions() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/responses", exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            String response = """
+                    {"status":"completed","output":[{"type":"message","content":[
+                    {"type":"output_text","text":"{\\"value\\":\\"ok\\"}"}]}]}
+                    """;
+            byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+        server.start();
+
+        ObjectMapper mapper = new ObjectMapper();
+        AssistantConfig config = new AssistantConfig();
+        config.getLlm().setApiKey("local-test-key");
+        config.getLlm().setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
+        config.getLlm().setModel("local-test-model");
+        config.getLlm().setRetryAttempts(1);
+        LlmClient client = new LlmClient(config, mapper, WebClient.builder());
+
+        String result = client.completeJson(
+                List.of(new ChatMessage("system", "Classify"), new ChatMessage("user", "Input")),
+                "result",
+                mapper.readTree("""
+                        {"type":"object","required":["value"],"properties":{"value":{"type":"string"}}}
+                        """));
+
+        JsonNode request = mapper.readTree(requestBody.get());
+        assertThat(result).isEqualTo("{\"value\":\"ok\"}");
+        assertThat(request.path("text").path("format").path("type").asText()).isEqualTo("text");
+        assertThat(request.path("instructions").asText()).contains("JSON Schema", "required", "value");
     }
 
     @Test

@@ -25,10 +25,17 @@ public class CurrentUserService {
                 || page.getSite().getSourceType() != SourceType.DOCUMENT) {
             return true;
         }
+        if (isAdmin()) {
+            return true;
+        }
         if (page.getOwnerId() == null || page.getOwnerId().isBlank()) {
-            return hasRole("ROLE_ADMIN");
+            return false;
         }
         return page.getOwnerId().equals(getUserId());
+    }
+
+    public boolean isAdmin() {
+        return hasRole("ROLE_ADMIN");
     }
 
     private boolean hasRole(String role) {

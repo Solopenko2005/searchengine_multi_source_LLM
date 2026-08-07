@@ -3,26 +3,13 @@ server:
 
 logging:
   level:
-    # Логирование для Hibernate
-    org:
-      hibernate:
-        SQL: DEBUG                           # Логирование всех SQL-запросов
-        type.descriptor.sql.BasicBinder: TRACE # Логирование привязанных параметров
-        transaction: DEBUG                    # Логирование транзакций Hibernate
-        engine: TRACE                         # Логирование внутренних процессов Hibernate
-
-    # Логирование для вашего приложения
-    searchengine:
-      controllers: DEBUG                      # Логирование контроллеров
-      services: DEBUG                         # Логирование сервисов
-      repository: DEBUG                       # Логирование репозиториев
-      model: DEBUG                            # Логирование моделей (сущностей)
-
-    # Логирование для других библиотек
-    com:
-      zaxxer:
-        hikari: DEBUG                         # Логирование пула соединений HikariCP
-    liquibase: INFO                           # Логирование Liquibase (миграции)
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    org.hibernate.transaction: WARN
+    org.hibernate.engine: WARN
+    searchengine: INFO
+    com.zaxxer.hikari: WARN
+    liquibase: INFO
 
   file:
     name: logs/application.log                # Сохранение логов в файл
@@ -53,7 +40,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: none  # Отключаем автоматическое создание таблиц через Hibernate
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -67,7 +54,7 @@ spring:
 assistant:
   llm:
     enabled: ${OPENAI_ENABLED:true}
-    provider: openai
+    provider: ${LLM_PROVIDER:OpenAI}
     base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-5.6-terra}
@@ -89,6 +76,8 @@ app:
     mode: ${SECURITY_MODE:basic}
     admin-username: ${APP_ADMIN_USERNAME:admin}
     admin-password: ${APP_ADMIN_PASSWORD:}
+    external-auth-enabled: ${AUTH_SERVICE_ENABLED:false}
+    auth-service-url: ${AUTH_SERVICE_URL:http://localhost:5555}
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:8080}
     assistant-rate-limit-per-minute: ${ASSISTANT_RATE_LIMIT_PER_MINUTE:30}
     jwt:

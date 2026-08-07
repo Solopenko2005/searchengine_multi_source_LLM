@@ -351,4 +351,63 @@
             </column>
         </createTable>
     </changeSet>
+
+    <changeSet id="15" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="indexing_job"/></not>
+        </preConditions>
+        <createTable tableName="indexing_job">
+            <column name="id" type="VARCHAR(36)"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="owner_id" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="source_type" type="VARCHAR(20)"><constraints nullable="false"/></column>
+            <column name="source_name" type="VARCHAR(500)"><constraints nullable="false"/></column>
+            <column name="source_url" type="VARCHAR(1000)"/>
+            <column name="site_id" type="INT"/>
+            <column name="state" type="VARCHAR(20)"><constraints nullable="false"/></column>
+            <column name="stage" type="VARCHAR(80)"><constraints nullable="false"/></column>
+            <column name="progress_percent" type="INT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="discovered_items" type="INT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="processed_items" type="INT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="failed_items" type="INT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="searchable_items" type="INT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="cancel_requested" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false"/></column>
+            <column name="error_message" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP"><constraints nullable="false"/></column>
+            <column name="started_at" type="TIMESTAMP"/>
+            <column name="finished_at" type="TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"><constraints nullable="false"/></column>
+        </createTable>
+        <createIndex tableName="indexing_job" indexName="idx_indexing_job_owner"><column name="owner_id"/></createIndex>
+        <createIndex tableName="indexing_job" indexName="idx_indexing_job_state"><column name="state"/></createIndex>
+        <createIndex tableName="indexing_job" indexName="idx_indexing_job_created"><column name="created_at"/></createIndex>
+    </changeSet>
+
+    <changeSet id="16" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="page"/>
+            <tableExists tableName="site"/>
+            <columnExists tableName="page" columnName="path"/>
+            <columnExists tableName="site" columnName="url"/>
+        </preConditions>
+        <modifyDataType tableName="page" columnName="path" newDataType="VARCHAR(2048)"/>
+        <modifyDataType tableName="site" columnName="url" newDataType="VARCHAR(1000)"/>
+    </changeSet>
+
+    <changeSet id="17" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="search_index"/>
+            <tableExists tableName="page"/>
+        </preConditions>
+        <createIndex tableName="search_index" indexName="idx_search_index_lemma_page">
+            <column name="lemma_id"/>
+            <column name="page_id"/>
+        </createIndex>
+        <createIndex tableName="search_index" indexName="idx_search_index_page_lemma">
+            <column name="page_id"/>
+            <column name="lemma_id"/>
+        </createIndex>
+        <createIndex tableName="page" indexName="idx_page_site_id">
+            <column name="site_id"/>
+        </createIndex>
+    </changeSet>
 </databaseChangeLog>

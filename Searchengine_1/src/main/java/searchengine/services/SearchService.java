@@ -208,26 +208,18 @@ public class SearchService {
 
     private Map<Page, Double> calculateRelevance(List<Page> pages, List<Lemma> lemmas) {
         Map<Page, Double> relevanceMap = new HashMap<>();
-        double maxRelevance = 0;
-
-        for (Page page : pages) {
-            double relevance = 0;
-            for (Lemma lemma : lemmas) {
-                Float rank = indexRepository.findRankByPageAndLemma(page, lemma);
-                if (rank != null) {
-                    relevance += rank;
-                }
-            }
-            relevanceMap.put(page, relevance);
-            if (relevance > maxRelevance) {
-                maxRelevance = relevance;
-            }
+        Map<Integer, Double> ranksByPageId = new HashMap<>();
+        List<String> lemmaTexts = lemmas.stream().map(Lemma::getLemma).distinct().toList();
+        for (Object[] row : indexRepository.sumRanksByPagesAndLemmas(pages, lemmaTexts)) {
+            Number pageId = (Number) row[0];
+            Number rank = (Number) row[1];
+            ranksByPageId.put(pageId.intValue(), rank.doubleValue());
         }
 
-        if (maxRelevance > 0) {
-            for (Map.Entry<Page, Double> entry : relevanceMap.entrySet()) {
-                entry.setValue(entry.getValue() / maxRelevance);
-            }
+        double maxRelevance = ranksByPageId.values().stream().mapToDouble(Double::doubleValue).max().orElse(0);
+        for (Page page : pages) {
+            double relevance = ranksByPageId.getOrDefault(page.getId(), 0.0);
+            relevanceMap.put(page, maxRelevance > 0 ? relevance / maxRelevance : 0.0);
         }
 
         return relevanceMap;

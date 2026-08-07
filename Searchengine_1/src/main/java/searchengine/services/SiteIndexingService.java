@@ -17,8 +17,7 @@ import searchengine.model.*;
 import searchengine.repository.SiteRepository;
 import searchengine.repository.TopicRepository;
 
-import javax.persistence.EntityManager;
-import javax.persistence.PersistenceContext;
+import javax.annotation.PreDestroy;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.SocketTimeoutException;
@@ -32,8 +31,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SiteIndexingService {
 
-    @PersistenceContext
-    private final EntityManager entityManager;
     private final Lemmatizer lemmatizer;
     private final DatabaseService databaseService;
     private final IndexingSettings indexingSettings;
@@ -42,10 +39,12 @@ public class SiteIndexingService {
     private final IndexingState indexingState; // общий флаг индексации для всех источников
     private final TopicExtractorService topicExtractorService;
     private final TopicRepository topicRepository;
+    private final IndexingJobService indexingJobService;
+    private final CurrentUserService currentUserService;
 
     private static final Logger logger = LoggerFactory.getLogger(SiteIndexingService.class);
     private ForkJoinPool pool;
-    private final Set<String> visitedUrls = ConcurrentHashMap.newKeySet();
+    private final ExecutorService siteCoordinator = Executors.newFixedThreadPool(4);
     private static final int MAX_RETRIES = 3;
     private static final int TIMEOUT = 10000;
 
@@ -55,17 +54,8 @@ public class SiteIndexingService {
      */
     public synchronized ResponseEntity<Map<String, Object>> startIndexing() {
         try {
-            if (indexingState.isIndexingInProgress()) {
-                return ResponseEntity.badRequest().body(Map.of(
-                        "result", false,
-                        "error", "Индексация уже запущена"
-                ));
-            }
-
             indexingState.clearStop();
             pageProcessor.resumeIndexing();
-            databaseService.truncateAllTables();
-            visitedUrls.clear();
             ensurePoolAvailable();
 
             List<IndexingSettings.SiteConfig> sites = indexingSettings.getSites();
@@ -79,7 +69,9 @@ public class SiteIndexingService {
             indexingState.beginOperation("Индексация сайтов", sites.size());
 
             for (IndexingSettings.SiteConfig siteConfig : sites) {
-                launchSiteCrawl(siteConfig.getUrl(), siteConfig.getName());
+                if (!indexingJobService.hasActiveSource(siteConfig.getUrl())) {
+                    launchSiteCrawl(siteConfig.getUrl(), siteConfig.getName());
+                }
             }
 
             return ResponseEntity.ok(Map.of(
@@ -117,17 +109,22 @@ public class SiteIndexingService {
 
             String siteName = (name == null || name.trim().isEmpty()) ? trimmedUrl : name.trim();
 
+            if (indexingJobService.hasActiveSource(trimmedUrl)) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "result", false,
+                        "error", "Этот источник уже индексируется; его состояние видно в таблице"
+                ));
+            }
+
             indexingState.clearStop();
-            pageProcessor.resumeIndexing();
-            // повторное добавление того же источника запускает его переиндексацию
-            visitedUrls.removeIf(visited -> visited.startsWith(trimmedUrl));
             ensurePoolAvailable();
 
-            launchSiteCrawl(trimmedUrl, siteName);
+            String jobId = launchSiteCrawl(trimmedUrl, siteName);
 
             logger.info("Добавлен источник для индексации: {}", trimmedUrl);
             return ResponseEntity.ok(Map.of(
                     "result", true,
+                    "jobId", jobId,
                     "message", "Источник добавлен, индексация запущена"
             ));
         } catch (Exception e) {
@@ -144,49 +141,63 @@ public class SiteIndexingService {
      * Когда завершится последняя единица работы (сайт или пакет документов),
      * общий флаг «идёт индексация» будет снят автоматически.
      */
-    private void launchSiteCrawl(String url, String name) {
+    private String launchSiteCrawl(String url, String name) {
+        String ownerId;
+        try {
+            ownerId = currentUserService.getUserId();
+        } catch (IllegalStateException ignored) {
+            ownerId = "system";
+        }
+        IndexingJob job = indexingJobService.create(ownerId, SourceType.WEBSITE, name, url, 1);
         indexingState.taskStarted();
-        CompletableFuture
-                .runAsync(() -> crawlSite(url, name), pool)
+        CompletableFuture<Void> future = CompletableFuture
+                .runAsync(() -> crawlSite(url, name, job.getId()), siteCoordinator)
                 .whenComplete((result, error) -> {
                     if (error != null) {
                         logger.error("Непредвиденная ошибка обхода сайта {}: {}", url, error.getMessage(), error);
                     }
                     indexingState.taskFinished();
                 });
+        indexingJobService.attachFuture(job.getId(), future);
+        return job.getId();
     }
 
     /**
      * Синхронно обходит один сайт целиком и по завершении выставляет итоговый статус:
      * INDEXED — если обход завершился нормально, FAILED — если была запрошена остановка.
      */
-    private void crawlSite(String url, String name) {
+    private void crawlSite(String url, String name, String jobId) {
         Site site = getOrCreateSite(url, name);
         try {
             site.setStatus(Status.INDEXING);
             site.setStatusTime(LocalDateTime.now());
             site.setLastError(null);
             databaseService.saveSite(site);
+            indexingJobService.markRunning(jobId, site.getId(), "Обход страниц");
 
-            if (!indexingState.isStopRequested()) {
+            if (!indexingJobService.isStopRequested(jobId)) {
                 // синхронный запуск: метод вернётся только когда обход сайта завершится
-                pool.invoke(new SiteIndexingTask(site, site.getUrl(), 0));
+                pool.invoke(new SiteIndexingTask(site, site.getUrl(), 0, jobId,
+                        ConcurrentHashMap.newKeySet()));
             }
 
             Site finalSite = siteRepository.findByUrl(url).orElse(site);
-            if (indexingState.isStopRequested()) {
+            if (indexingJobService.isStopRequested(jobId)) {
                 finalSite.setStatus(Status.STOPPED);
                 finalSite.setLastError("Индексация остановлена пользователем");
+                indexingJobService.stopped(jobId);
                 indexingState.itemFailed();
             } else {
                 finalSite.setStatus(Status.INDEXED);
                 finalSite.setLastError(null);
+                indexingJobService.complete(jobId);
                 indexingState.itemCompleted();
             }
             finalSite.setStatusTime(LocalDateTime.now());
             databaseService.saveSite(finalSite);
         } catch (Exception e) {
             indexingState.itemFailed();
+            indexingJobService.failed(jobId, e.getMessage());
             handleSiteError(site, e);
         }
     }
@@ -234,11 +245,10 @@ public class SiteIndexingService {
                 );
             }
 
-            indexingState.requestStop();
-            pageProcessor.stopIndexing();
+            int stopped = indexingJobService.requestStopAllVisible();
 
             return ResponseEntity.ok(
-                    new IndexingResponse(true, "Индексация останавливается")
+                    new IndexingResponse(true, "Останавливается заданий: " + stopped)
             );
         } catch (Exception e) {
             logger.error("Ошибка при остановке индексации", e);
@@ -339,11 +349,11 @@ public class SiteIndexingService {
         }
     }
 
-    private Document fetchDocumentWithRetries(String url) throws IOException {
+    private Document fetchDocumentWithRetries(String url, String jobId) throws IOException {
         int retries = 0;
-        while (retries < MAX_RETRIES && !indexingState.isStopRequested()) {
+        while (retries < MAX_RETRIES && !indexingJobService.isStopRequested(jobId)) {
             try {
-                if (indexingState.isStopRequested()) {
+                if (indexingJobService.isStopRequested(jobId)) {
                     throw new IOException("Задача прервана");
                 }
 
@@ -370,7 +380,7 @@ public class SiteIndexingService {
                 throw new IOException("Задача прервана", e);
             }
         }
-        if (indexingState.isStopRequested()) {
+        if (indexingJobService.isStopRequested(jobId)) {
             return null;
         }
         throw new IOException("Не удалось загрузить страницу после " + MAX_RETRIES + " попыток: " + url);
@@ -380,33 +390,40 @@ public class SiteIndexingService {
         private final Site site;
         private final String url;
         private final int depth;
+        private final String jobId;
+        private final Set<String> visitedUrls;
 
-        public SiteIndexingTask(Site site, String url, int depth) {
+        public SiteIndexingTask(Site site, String url, int depth, String jobId, Set<String> visitedUrls) {
             this.site = site;
             this.url = url;
             this.depth = depth;
+            this.jobId = jobId;
+            this.visitedUrls = visitedUrls;
         }
 
         @Override
         protected Void compute() {
             try {
-                if (indexingState.isStopRequested() || !visitedUrls.add(url)) {
+                if (indexingJobService.isStopRequested(jobId) || !visitedUrls.add(url)) {
+                    return null;
+                }
+                if (depth > 0) indexingJobService.recordDiscovered(jobId);
+
+                Document document = fetchDocumentWithRetries(url, jobId);
+                if (document == null || indexingJobService.isStopRequested(jobId)) {
+                    indexingJobService.recordProcessed(jobId, false);
                     return null;
                 }
 
-                Document document = fetchDocumentWithRetries(url);
-                if (document == null || indexingState.isStopRequested()) {
-                    return null;
-                }
+                savePageAndLemmas(site, url, document, jobId);
+                indexingJobService.recordProcessed(jobId, true);
 
-                savePageAndLemmas(site, url, document);
-
-                if (depth < 10 && !indexingState.isStopRequested()) {
+                if (depth < 10 && !indexingJobService.isStopRequested(jobId)) {
                     Elements links = document.select("a[href]");
                     List<SiteIndexingTask> subTasks = links.stream()
                             .map(link -> link.absUrl("href"))
                             .filter(this::isValidUrl)
-                            .map(link -> new SiteIndexingTask(site, link, depth + 1))
+                            .map(link -> new SiteIndexingTask(site, link, depth + 1, jobId, visitedUrls))
                             .collect(Collectors.toList());
 
                     invokeAll(subTasks);
@@ -414,9 +431,8 @@ public class SiteIndexingService {
             } catch (CancellationException e) {
                 logger.warn("Задача была отменена для URL: {}", url);
             } catch (Exception e) {
+                indexingJobService.recordProcessed(jobId, false);
                 logger.error("Ошибка обработки {}: {}", url, e.getMessage(), e);
-            } finally {
-                entityManager.clear();
             }
             return null;
         }
@@ -432,28 +448,24 @@ public class SiteIndexingService {
     }
 
     @Transactional(rollbackFor = Exception.class, timeout = 30)
-    protected void savePageAndLemmas(Site site, String url, Document document) {
-        if (indexingState.isStopRequested()) {
+    protected void savePageAndLemmas(Site site, String url, Document document, String jobId) {
+        if (indexingJobService.isStopRequested(jobId)) {
             logger.info("Индексация прервана пользователем для URL: {}", url);
             throw new RuntimeException("Индексация прервана");
         }
 
+        pageProcessor.deletePageInfoIfExists(site, url);
         Page page = createPage(site, url, document);
         String content = document.body().text();
         String htmlContent = document.outerHtml();
 
         databaseService.savePage(page);
-
-        extractAndSaveTopics(page, htmlContent);
-
         Map<String, Integer> lemmaMap = lemmatizer.extractLemmasWithRank(content);
-        lemmaMap.forEach((lemmaText, rank) -> {
-            if (indexingState.isStopRequested()) return;
-            Lemma savedLemma = databaseService.saveLemma(lemmaText, site);
-            if (savedLemma != null) {
-                saveSearchIndex(page, savedLemma, rank);
-            }
-        });
+        databaseService.savePageSearchIndex(page, site, lemmaMap);
+
+        // Тематики считаются после поискового индекса: сохранённая страница уже
+        // доступна поиску, даже если более дорогой LLM-анализ ещё продолжается.
+        extractAndSaveTopics(page, htmlContent);
 
         logger.debug("Страница {} проиндексирована с {} темами", url, page.getTopics().size());
     }
@@ -494,18 +506,18 @@ public class SiteIndexingService {
     private Page createPage(Site site, String url, Document document) {
         Page page = new Page();
         page.setSite(site);
-        page.setPath(url.replace(site.getUrl(), ""));
+        String path = url.replace(site.getUrl(), "");
+        page.setPath(path.isEmpty() ? "/" : path);
         page.setCode(document.connection().response().statusCode());
         page.setContent(document.outerHtml());
         page.setTopicCount(0);
         return page;
     }
 
-    private void saveSearchIndex(Page page, Lemma lemma, int rank) {
-        SearchIndex index = new SearchIndex();
-        index.setPage(page);
-        index.setLemma(lemma);
-        index.setRanking(rank);
-        databaseService.saveSearchIndex(index);
+    @PreDestroy
+    void shutdownExecutors() {
+        siteCoordinator.shutdownNow();
+        if (pool != null) pool.shutdownNow();
     }
+
 }

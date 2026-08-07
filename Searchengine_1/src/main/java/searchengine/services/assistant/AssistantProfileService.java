@@ -33,8 +33,11 @@ public class AssistantProfileService {
     public AssistantProfileResponse get() {
         String ownerId = currentUserService.getUserId();
         return profileRepository.findByOwnerId(ownerId)
-                .map(profile -> new AssistantProfileResponse(true, profile.getInstructions(),
-                        validateDocumentIds(parseIds(profile.getDocumentIds()))))
+                .map(profile -> {
+                    List<Integer> selected = validateDocumentIds(parseIds(profile.getDocumentIds()));
+                    if (selected.isEmpty()) selected = accessibleDocumentIds();
+                    return new AssistantProfileResponse(true, profile.getInstructions(), selected);
+                })
                 .orElseGet(() -> new AssistantProfileResponse(true, "", accessibleDocumentIds()));
     }
 
@@ -68,6 +71,7 @@ public class AssistantProfileService {
         }
         List<Integer> ids = requestDocumentIds != null && !requestDocumentIds.isEmpty()
                 ? validateDocumentIds(requestDocumentIds) : stored.getDocumentIds();
+        if (ids == null || ids.isEmpty()) ids = accessibleDocumentIds();
         return new ResolvedProfile(instructions, ids);
     }
 

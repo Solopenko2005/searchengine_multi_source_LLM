@@ -19,6 +19,8 @@ import searchengine.services.EnhancedTopicFilterService;
 import searchengine.services.SearchService;
 import searchengine.services.CurrentUserService;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -257,6 +259,10 @@ public class AssistantService {
         return llmClient.getConfiguredModel();
     }
 
+    public String getLlmProvider() {
+        return config.getLlm().getProvider();
+    }
+
     // ---------------------------------------------------------------------
     // Внутренняя логика
     // ---------------------------------------------------------------------
@@ -268,6 +274,9 @@ public class AssistantService {
         }
         int maxDocs = Math.max(1, config.getRag().getMaxDocuments());
         int maxChars = Math.max(200, config.getRag().getMaxCharsPerDocument());
+        if (documentIds != null && !documentIds.isEmpty()) {
+            return retrieveSelectedDocuments(question, documentIds, maxDocs, maxChars);
+        }
         Set<Integer> allowedDocumentIds = documentIds == null
                 ? Set.of()
                 : new HashSet<>(documentIds);
@@ -299,7 +308,7 @@ public class AssistantService {
 
             if (r.getPageId() != null) {
                 try {
-                    Optional<Page> pageOpt = pageRepository.findById(r.getPageId().longValue());
+                    Optional<Page> pageOpt = pageRepository.findById(r.getPageId());
                     if (pageOpt.isPresent() && currentUserService.canAccess(pageOpt.get())) {
                         Page page = pageOpt.get();
                         content = selectRelevantExcerpt(Jsoup.parse(page.getContent()).text(), question, maxChars);
@@ -330,6 +339,31 @@ public class AssistantService {
             if (docs.size() >= maxDocs) {
                 break;
             }
+        }
+        return docs;
+    }
+
+    private List<RetrievedDoc> retrieveSelectedDocuments(String question, List<Integer> documentIds,
+                                                          int maxDocs, int maxChars) {
+        List<RetrievedDoc> docs = new ArrayList<>();
+        int index = 1;
+        for (Integer pageId : new java.util.LinkedHashSet<>(documentIds)) {
+            if (pageId == null || pageId <= 0) continue;
+            Optional<Page> pageOpt = pageRepository.findById(pageId);
+            if (pageOpt.isEmpty() || !currentUserService.canAccess(pageOpt.get())) continue;
+
+            Page page = pageOpt.get();
+            String plainText = Jsoup.parse(page.getContent()).text();
+            if (plainText.isBlank()) continue;
+            String excerpt = selectRelevantExcerpt(plainText, question, maxChars);
+            String title = page.getOriginalFileName();
+            if (title == null || title.isBlank()) title = Jsoup.parse(page.getContent()).title();
+            if (title == null || title.isBlank()) title = page.getSite().getName();
+            String url = "/documents/" + page.getId() + "?query="
+                    + URLEncoder.encode(question, StandardCharsets.UTF_8);
+            docs.add(new RetrievedDoc(index++, title, page.getSite().getName(), url,
+                    truncate(excerpt, 500), excerpt));
+            if (docs.size() >= maxDocs) break;
         }
         return docs;
     }

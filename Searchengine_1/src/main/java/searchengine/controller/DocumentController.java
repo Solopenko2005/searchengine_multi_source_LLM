@@ -53,7 +53,7 @@ public class DocumentController {
     }
 
     @GetMapping(value = "/documents/{id}", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<String> view(@PathVariable Long id,
+    public ResponseEntity<String> view(@PathVariable Integer id,
                                        @RequestParam(defaultValue = "") String query) {
         Page page = pageRepository.findById(id).orElse(null);
         if (page == null || page.getSite() == null || page.getSite().getSourceType() != SourceType.DOCUMENT) {

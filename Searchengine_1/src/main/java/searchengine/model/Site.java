@@ -30,7 +30,7 @@ public class Site {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
 
-    @Column(columnDefinition = "VARCHAR(255)")
+    @Column(length = 1000)
     private String url;
 
     @Column(columnDefinition = "VARCHAR(255)")

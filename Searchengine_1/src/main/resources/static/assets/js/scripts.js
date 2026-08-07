@@ -1453,11 +1453,17 @@ function readCookie(name) {
     return '';
 }
 
+function readMeta(name) {
+    var element = document.querySelector('meta[name="' + name + '"]');
+    return element ? element.getAttribute('content') : '';
+}
+
 $(document).ajaxSend(function(event, xhr, settings) {
     if (settings.type && settings.type.toUpperCase() !== 'GET') {
-        var csrfToken = readCookie('XSRF-TOKEN');
+        var csrfToken = readMeta('_csrf') || readCookie('XSRF-TOKEN');
+        var csrfHeader = readMeta('_csrf_header') || 'X-XSRF-TOKEN';
         if (csrfToken) {
-            xhr.setRequestHeader('X-XSRF-TOKEN', csrfToken);
+            xhr.setRequestHeader(csrfHeader, csrfToken);
         }
     }
 });
@@ -1809,7 +1815,7 @@ var API = function(){
             });
             // первичная загрузка статистики и последующее автообновление каждые 2 секунды
             refreshStatistics();
-            setInterval(refreshStatistics, 2000);
+            setInterval(refreshStatistics, 10000);
             var $send = $('[data-send]');
             $send.on('submit click', function(e){
                 var $this = $(this);
@@ -1883,9 +1889,13 @@ var DocumentUpload = function(){
         clearMessages($form);
         var $group = $form.find('.form-group_row');
         if (result.accepted) {
+            var jobLabel = result.jobIds && result.jobIds.length
+                ? (result.jobIds.length + ' отдельных заданий')
+                : (result.jobId || 'задание создано');
             $group.append('<div class="API-success">' +
                 (result.message || 'Документы приняты в фоновую индексацию') +
-                ' (задача ' + (result.jobId || 'создана') + ')</div>');
+                ' (' + jobLabel + ')</div>');
+            if (window.refreshIndexingJobs) window.refreshIndexingJobs();
             return;
         }
         var overallClass = result.success > 0 ? 'API-success' : 'API-error';

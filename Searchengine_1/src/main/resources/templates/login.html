@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Вход — поисковая система</title>
+    <link rel="stylesheet" href="/assets/css/fonts.css">
+    <link rel="stylesheet" href="/assets/css/login.css">
+</head>
+<body>
+<main class="auth-layout">
+    <img class="auth-logo" src="/assets/img/auth-logo.png" alt="Логотип поисковой системы">
+
+    <div class="auth-container">
+        <section class="auth-intro" aria-labelledby="welcome-title">
+            <div class="auth-intro__content">
+                <h1 id="welcome-title">Привет!</h1>
+                <p>
+                    Мы создали эту систему для поиска информации в научных статьях,
+                    учебных материалах и технической документации, чтобы вы могли удобно
+                    и точно получать нужную академическую информацию без рекламы и
+                    информационного шума. Приятного пользования!
+                </p>
+                <a class="auth-secondary-action" href="/register" th:if="${registrationEnabled}">
+                    Регистрация
+                </a>
+                <span class="auth-secondary-action auth-secondary-action_disabled"
+                      th:unless="${registrationEnabled}"
+                      title="Сервис регистрации отключён в настройках">
+                    Регистрация
+                </span>
+            </div>
+
+            <footer class="auth-footer">
+                <span>Поисковая система</span>
+                <span>Язык: <strong>Русский</strong></span>
+            </footer>
+        </section>
+
+        <section class="login-card" aria-labelledby="login-title">
+            <h2 id="login-title">Войдите в аккаунт</h2>
+
+            <div class="login-message login-message_error" role="alert" th:if="${param.error}">
+                Неверный логин или пароль. Проверьте данные и попробуйте ещё раз.
+            </div>
+            <div class="login-message login-message_success" role="status" th:if="${param.logout}">
+                Вы успешно вышли из системы.
+            </div>
+            <div class="login-message login-message_success" role="status" th:if="${param.registered}">
+                Регистрация завершена. Теперь войдите по e-mail и паролю.
+            </div>
+
+            <form class="login-form" th:action="@{/login}" method="post">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+                <div class="login-field">
+                    <label for="username">Логин или e-mail</label>
+                    <input id="username" name="username" type="text" autocomplete="username"
+                           autocapitalize="none" spellcheck="false" required autofocus>
+                </div>
+
+                <div class="login-field">
+                    <label for="password">Пароль</label>
+                    <input id="password" name="password" type="password"
+                           autocomplete="current-password" required>
+                    <button class="password-toggle" type="button" aria-label="Показать пароль"
+                            aria-pressed="false" data-password-toggle>
+                        <span aria-hidden="true"></span>
+                    </button>
+                </div>
+
+                <div class="login-actions">
+                    <button class="login-submit" type="submit">Войти</button>
+                    <span class="login-help"
+                          title="Восстановление пароля будет доступно во внешнем сервисе авторизации">
+                        Забыли пароль?
+                    </span>
+                </div>
+            </form>
+
+            <p class="login-note">
+                После входа вы автоматически перейдёте в поисковую систему.
+            </p>
+        </section>
+    </div>
+
+    <div class="auth-waves" aria-hidden="true">
+        <svg viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+            <defs>
+                <path id="gentle-wave" d="M-160 44c30 0 58-18 88-18s58 18 88 18 58-18 88-18 58 18 88 18v44h-352z"></path>
+            </defs>
+            <g>
+                <use href="#gentle-wave" x="48" y="0" fill="#EAF3B2"></use>
+                <use href="#gentle-wave" x="48" y="3" fill="#D4E08C"></use>
+                <use href="#gentle-wave" x="48" y="5" fill="#BECD6E"></use>
+                <use href="#gentle-wave" x="48" y="7" fill="#A8BA50"></use>
+            </g>
+        </svg>
+    </div>
+</main>
+
+<script>
+    (function () {
+        var toggle = document.querySelector('[data-password-toggle]');
+        var password = document.getElementById('password');
+        if (!toggle || !password) return;
+        toggle.addEventListener('click', function () {
+            var visible = password.type === 'text';
+            password.type = visible ? 'password' : 'text';
+            toggle.setAttribute('aria-pressed', String(!visible));
+            toggle.setAttribute('aria-label', visible ? 'Показать пароль' : 'Скрыть пароль');
+        });
+    }());
+</script>
+</body>
+</html>

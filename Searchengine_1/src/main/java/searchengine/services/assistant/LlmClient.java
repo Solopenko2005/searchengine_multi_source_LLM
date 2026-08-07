@@ -12,6 +12,7 @@ import searchengine.config.assistant.AssistantConfig;
 import searchengine.dto.assistant.ChatMessage;
 
 import java.time.Duration;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -68,13 +69,16 @@ public class LlmClient {
     private Map<String, Object> buildRequest(List<ChatMessage> messages,
                                              String schemaName, JsonNode schema) {
         AssistantConfig.Llm llm = config.getLlm();
+        boolean localEndpoint = isLocalEndpoint(llm.getBaseUrl());
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", llm.getModel());
         body.put("store", false);
-        body.put("max_output_tokens", Math.max(128, llm.getMaxOutputTokens()));
+        int outputTokens = Math.max(128, llm.getMaxOutputTokens());
+        if (localEndpoint) outputTokens = Math.min(outputTokens, 700);
+        body.put("max_output_tokens", outputTokens);
         safetyIdentifier().ifPresent(value -> body.put("safety_identifier", value));
 
-        if (hasText(llm.getReasoningEffort())) {
+        if (!localEndpoint && hasText(llm.getReasoningEffort())) {
             body.put("reasoning", Map.of("effort", llm.getReasoningEffort()));
         }
 
@@ -90,8 +94,21 @@ public class LlmClient {
                 }
                 instructions.append(message.getContent());
             } else if ("user".equals(message.getRole()) || "assistant".equals(message.getRole())) {
-                input.add(Map.of("role", message.getRole(), "content", message.getContent()));
+                String content = message.getContent();
+                if (localEndpoint && "user".equals(message.getRole()) && input.stream()
+                        .noneMatch(item -> "user".equals(item.get("role")))) {
+                    content = "/no_think\n" + content;
+                }
+                input.add(Map.of("role", message.getRole(), "content", content));
             }
+        }
+        if (schema != null && localEndpoint) {
+            if (instructions.length() > 0) {
+                instructions.append("\n\n");
+            }
+            instructions.append("Return only valid JSON matching this JSON Schema exactly. ")
+                    .append("Do not add fields that are not declared in the schema:\n")
+                    .append(schema);
         }
         if (instructions.length() > 0) {
             body.put("instructions", instructions.toString());
@@ -100,16 +117,31 @@ public class LlmClient {
 
         Map<String, Object> text = new LinkedHashMap<>();
         text.put("verbosity", "medium");
-        if (schema != null) {
+        if (schema != null && !localEndpoint) {
             Map<String, Object> format = new LinkedHashMap<>();
             format.put("type", "json_schema");
             format.put("name", hasText(schemaName) ? schemaName : "structured_result");
             format.put("strict", true);
             format.put("schema", schema);
             text.put("format", format);
+        } else {
+            // OpenAI-compatible local servers such as LM Studio require an
+            // explicit format even for an ordinary text response.
+            text.put("format", Map.of("type", "text"));
         }
         body.put("text", text);
         return body;
+    }
+
+    private boolean isLocalEndpoint(String baseUrl) {
+        try {
+            String host = URI.create(baseUrl).getHost();
+            return "localhost".equalsIgnoreCase(host)
+                    || "127.0.0.1".equals(host)
+                    || "::1".equals(host);
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     private String execute(Map<String, Object> body) {
