@@ -1,7 +1,7 @@
 package searchengine.controller;
 
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 
 @Controller
 public class DefaultController {
@@ -11,8 +11,18 @@ public class DefaultController {
      * который находится в папке resorces/templates.
      * Это делает библиотека Thymeleaf.
      */
-    @RequestMapping("/")
+    @GetMapping("/")
+    public String landing() {
+        return "landing";
+    }
+
+    @GetMapping("/app")
     public String index() {
         return "index";
+    }
+
+    @GetMapping("/privacy")
+    public String privacy() {
+        return "privacy";
     }
 }

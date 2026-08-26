@@ -46,6 +46,10 @@ public class Site {
     @Column(columnDefinition = "TEXT")
     private String lastError;
 
+    /** Administrator workspace that owns this source. */
+    @Column(name = "owner_id", length = 255)
+    private String ownerId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "source_type", columnDefinition = "VARCHAR(20)")
     @Builder.Default

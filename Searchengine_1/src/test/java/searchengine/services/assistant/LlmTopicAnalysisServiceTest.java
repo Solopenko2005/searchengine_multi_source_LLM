@@ -10,6 +10,7 @@ import searchengine.model.Page;
 import searchengine.model.Site;
 import searchengine.model.SourceType;
 import searchengine.repository.PageRepository;
+import searchengine.repository.WorkspaceMembershipRepository;
 import searchengine.services.CurrentUserService;
 
 import java.util.List;
@@ -41,13 +42,14 @@ class LlmTopicAnalysisServiceTest {
                 """);
 
         PageRepository pages = mock(PageRepository.class);
-        when(pages.findAllByOrderByIdDesc()).thenReturn(List.of(document()));
+        when(pages.findRecentAccessibleBySiteIds(any(), any(), any(Boolean.class), any()))
+                .thenReturn(List.of(document()));
         AssistantConfig config = new AssistantConfig();
         config.getRag().setTopicMinConfidence(0.65);
         LlmTopicAnalysisService service = new LlmTopicAnalysisService(client, config, pages,
-                new ObjectMapper(), new CurrentUserService());
+                new ObjectMapper(), new CurrentUserService(mock(WorkspaceMembershipRepository.class)));
 
-        LlmTopicAnalysisService.Analysis analysis = service.analyze(List.of(1), "Агрономия")
+        LlmTopicAnalysisService.Analysis analysis = service.analyze(List.of(10), "Агрономия")
                 .orElseThrow();
         assertThat(analysis.getTopics()).hasSize(1);
         assertThat(analysis.getTopics().get(0).getTheme()).isEqualTo("Селекция");
@@ -56,6 +58,7 @@ class LlmTopicAnalysisServiceTest {
 
     private Page document() {
         Site site = new Site();
+        site.setId(10);
         site.setName("Мои документы");
         site.setSourceType(SourceType.DOCUMENT);
         Page page = new Page();

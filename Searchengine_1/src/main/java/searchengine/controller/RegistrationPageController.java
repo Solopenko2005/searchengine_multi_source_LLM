@@ -35,10 +35,12 @@ public class RegistrationPageController {
                            @RequestParam String email,
                            @RequestParam String password,
                            @RequestParam String confirmPassword,
+                           @RequestParam(defaultValue = "USER") String role,
                            Model model) {
         model.addAttribute("firstName", firstName);
         model.addAttribute("lastName", lastName);
         model.addAttribute("email", email);
+        model.addAttribute("role", role);
 
         if (firstName.isBlank() || lastName.isBlank() || email.isBlank()) {
             model.addAttribute("registrationError", "Заполните имя, фамилию и e-mail");
@@ -52,11 +54,19 @@ public class RegistrationPageController {
             model.addAttribute("registrationError", "Пароли не совпадают");
             return "register";
         }
+        String normalizedRole = role == null ? "USER" : role.trim().toUpperCase();
+        if (!normalizedRole.equals("USER") && !normalizedRole.equals("ADMIN")) {
+            model.addAttribute("registrationError", "Выберите доступ «Администратор» или «Посетитель»");
+            return "register";
+        }
 
         try {
             authServiceClient.register(new AuthServiceClient.RegistrationCommand(
-                    firstName.trim(), lastName.trim(), email.trim().toLowerCase(), password, confirmPassword));
-            return "redirect:/login?registered";
+                    firstName.trim(), lastName.trim(), email.trim().toLowerCase(), password,
+                    confirmPassword, normalizedRole));
+            return normalizedRole.equals("ADMIN")
+                    ? "redirect:/login?adminVerificationPending"
+                    : "redirect:/login?registered";
         } catch (AuthServiceException exception) {
             model.addAttribute("registrationError", exception.getMessage());
             return "register";

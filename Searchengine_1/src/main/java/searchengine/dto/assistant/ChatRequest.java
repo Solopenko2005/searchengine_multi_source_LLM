@@ -32,4 +32,7 @@ public class ChatRequest {
 
     /** Необязательное ограничение RAG конкретными документами пользователя. */
     private List<Integer> documentIds = new ArrayList<>();
+
+    /** Optional restriction to whole sources (web sites, files or API articles). */
+    private List<Integer> sourceIds = new ArrayList<>();
 }

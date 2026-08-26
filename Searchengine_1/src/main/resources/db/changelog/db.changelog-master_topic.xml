@@ -410,4 +410,71 @@
             <column name="site_id"/>
         </createIndex>
     </changeSet>
+
+    <changeSet id="18" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="assistant_profile"/>
+                <not><columnExists tableName="assistant_profile" columnName="source_ids"/></not>
+            </and>
+        </preConditions>
+        <addColumn tableName="assistant_profile">
+            <column name="source_ids" type="TEXT" defaultValue="">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="19" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="site"/>
+                <not><columnExists tableName="site" columnName="owner_id"/></not>
+            </and>
+        </preConditions>
+        <addColumn tableName="site">
+            <column name="owner_id" type="VARCHAR(255)"/>
+        </addColumn>
+        <createIndex tableName="site" indexName="idx_site_owner_id"><column name="owner_id"/></createIndex>
+        <sql>
+            UPDATE site s SET owner_id = owners.owner_id
+            FROM (SELECT site_id, MIN(owner_id) AS owner_id FROM page
+                  WHERE owner_id IS NOT NULL AND owner_id &lt;&gt; '' GROUP BY site_id) owners
+            WHERE s.id = owners.site_id AND s.owner_id IS NULL
+        </sql>
+    </changeSet>
+
+    <changeSet id="20" author="codex">
+        <preConditions onFail="MARK_RAN"><not><tableExists tableName="workspace_group"/></not></preConditions>
+        <createTable tableName="workspace_group">
+            <column name="id" type="BIGSERIAL" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="name" type="VARCHAR(120)"><constraints nullable="false"/></column>
+            <column name="owner_id" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="invite_code" type="VARCHAR(36)"><constraints nullable="false" unique="true" uniqueConstraintName="uc_workspace_group_invite"/></column>
+            <column name="created_at" type="TIMESTAMP"><constraints nullable="false"/></column>
+        </createTable>
+        <createIndex tableName="workspace_group" indexName="idx_workspace_group_owner"><column name="owner_id"/></createIndex>
+        <createTable tableName="workspace_membership">
+            <column name="id" type="BIGSERIAL" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="group_id" type="BIGINT"><constraints nullable="false" foreignKeyName="fk_workspace_membership_group" referencedTableName="workspace_group" referencedColumnNames="id" deleteCascade="true"/></column>
+            <column name="user_id" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="joined_at" type="TIMESTAMP"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint tableName="workspace_membership" columnNames="group_id,user_id" constraintName="uc_workspace_membership_user"/>
+        <createIndex tableName="workspace_membership" indexName="idx_workspace_membership_user"><column name="user_id"/></createIndex>
+    </changeSet>
+
+    <changeSet id="21" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="assistant_profile"/>
+                <not><columnExists tableName="assistant_profile" columnName="detected_topics"/></not>
+            </and>
+        </preConditions>
+        <addColumn tableName="assistant_profile">
+            <column name="detected_topics" type="TEXT" defaultValue="">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
 </databaseChangeLog>

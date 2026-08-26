@@ -198,12 +198,11 @@ public class IndexingJobService {
     }
 
     private List<IndexingJob> visibleJobs() {
-        if (currentUserService.isAdmin()) return repository.findAllByOrderByCreatedAtDesc();
         return repository.findByOwnerIdOrderByCreatedAtDesc(currentUserService.getUserId());
     }
 
     private boolean canManage(IndexingJob job) {
-        return currentUserService.isAdmin() || job.getOwnerId().equals(currentUserService.getUserId());
+        return job.getOwnerId().equals(currentUserService.getUserId());
     }
 
     private Map<String, Object> toDto(IndexingJob job) {

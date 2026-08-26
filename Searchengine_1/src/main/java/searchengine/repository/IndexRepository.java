@@ -3,6 +3,7 @@ package searchengine.repository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.repository.query.Param;
 import searchengine.model.Lemma;
 import searchengine.model.Page;
@@ -10,6 +11,7 @@ import searchengine.model.SearchIndex;
 import searchengine.model.Site;
 
 import java.util.List;
+import java.util.Collection;
 
 public interface IndexRepository extends JpaRepository<SearchIndex, Long> {
     @Query("SELECT page FROM Page page WHERE page.id IN (" +
@@ -35,4 +37,14 @@ public interface IndexRepository extends JpaRepository<SearchIndex, Long> {
             "WHERE si.page IN :pages AND si.lemma.lemma IN :lemmas GROUP BY si.page.id")
     List<Object[]> sumRanksByPagesAndLemmas(@Param("pages") List<Page> pages,
                                              @Param("lemmas") List<String> lemmas);
+
+    @Query("SELECT si.page.id FROM SearchIndex si " +
+            "WHERE si.lemma.lemma IN :lemmas AND si.page.site.id IN :siteIds " +
+            "GROUP BY si.page.id " +
+            "HAVING COUNT(DISTINCT si.lemma.lemma) = :lemmaCount " +
+            "ORDER BY SUM(si.ranking) DESC")
+    List<Integer> findTopPageIdsByLemmasAndSiteIds(@Param("lemmas") Collection<String> lemmas,
+                                                    @Param("siteIds") Collection<Integer> siteIds,
+                                                    @Param("lemmaCount") long lemmaCount,
+                                                    Pageable pageable);
 }

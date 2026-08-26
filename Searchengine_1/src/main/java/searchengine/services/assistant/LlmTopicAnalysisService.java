@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.jsoup.Jsoup;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import searchengine.config.assistant.AssistantConfig;
 import searchengine.dto.assistant.ChatMessage;
@@ -32,23 +33,40 @@ public class LlmTopicAnalysisService {
     private final ObjectMapper objectMapper;
     private final CurrentUserService currentUserService;
 
-    public Optional<Analysis> analyze(List<Integer> selectedDocumentIds, String profileInstructions) {
+    public Optional<Analysis> analyze(List<Integer> selectedSourceIds, String profileInstructions) {
         if (!llmClient.isConfigured()) {
             return Optional.empty();
         }
 
         int limit = Math.max(1, config.getRag().getTopicDocumentLimit());
-        Set<Integer> selected = selectedDocumentIds == null
-                ? Set.of() : new LinkedHashSet<>(selectedDocumentIds);
+        List<Integer> selected = selectedSourceIds == null
+                ? List.of() : new ArrayList<>(new LinkedHashSet<>(selectedSourceIds));
         if (selected.isEmpty()) {
             return Optional.empty();
         }
-        List<Page> pages = pageRepository.findAllByOrderByIdDesc().stream()
-                .filter(currentUserService::canAccess)
-                .filter(page -> selected.contains(page.getId()))
-                .filter(page -> page.getContent() != null && !page.getContent().isBlank())
-                .limit(limit)
-                .toList();
+        Set<String> ownerIds = currentUserService.accessibleOwnerIds();
+        boolean includeLegacy = currentUserService.isAdmin();
+        List<Page> pages;
+        if (llmClient.isLocalProvider()) {
+            pages = new ArrayList<>();
+            // One bounded query per source prevents a large website from crowding
+            // all other sources out of a small local-model context window.
+            for (Integer sourceId : selected.stream().limit(20).toList()) {
+                List<Page> representative = pageRepository.findRepresentativeAccessiblePage(
+                        sourceId, ownerIds, includeLegacy,
+                        PageRequest.of(0, 1));
+                if (!representative.isEmpty() && representative.get(0).getContent() != null
+                        && !representative.get(0).getContent().isBlank()) {
+                    pages.add(representative.get(0));
+                }
+            }
+        } else {
+            pages = pageRepository.findRecentAccessibleBySiteIds(selected,
+                            ownerIds, includeLegacy,
+                            PageRequest.of(0, limit)).stream()
+                    .filter(page -> page.getContent() != null && !page.getContent().isBlank())
+                    .toList();
+        }
         if (pages.isEmpty()) {
             return Optional.empty();
         }
@@ -66,7 +84,8 @@ public class LlmTopicAnalysisService {
                 title = page.getPath();
             }
             String text = Jsoup.parse(page.getContent()).text();
-            text = text.length() > 1800 ? text.substring(0, 1800) : text;
+            int excerptLimit = llmClient.isLocalProvider() ? 280 : 1800;
+            text = text.length() > excerptLimit ? text.substring(0, excerptLimit) : text;
             documents.append("<document id=\"D").append(index).append("\">\n")
                     .append("Название: ").append(title).append("\n")
                     .append("Текст: ").append(text).append("\n")
@@ -84,8 +103,9 @@ public class LlmTopicAnalysisService {
             system += "\n\nПредметный профиль пользователя (влияет на детализацию, но не разрешает "
                     + "выдумывать темы):\n" + profileInstructions;
         }
-        String user = "Проанализируй документы ниже. Верни 5–20 наиболее содержательных тематик и "
-                + "краткий общий обзор. Не добавляй тему, если она не подтверждается ни одним документом.\n\n"
+        String user = "Проанализируй документы ниже. Верни от 5 до 10 наиболее содержательных тематик, "
+                + "описание каждой темы не длиннее одного предложения и краткий общий обзор. "
+                + "Не добавляй тему, если она не подтверждается ни одним документом.\n\n"
                 + documents;
 
         try {
@@ -95,12 +115,14 @@ public class LlmTopicAnalysisService {
                     "document_topic_analysis", schema);
             return Optional.of(parse(json, byIndex));
         } catch (Exception e) {
-            throw new LlmClient.LlmException("Не удалось выполнить LLM-анализ тематик", e);
+            String detail = e.getMessage() == null || e.getMessage().isBlank()
+                    ? e.getClass().getSimpleName() : e.getMessage();
+            throw new LlmClient.LlmException("Не удалось выполнить LLM-анализ тематик: " + detail, e);
         }
     }
 
     private Analysis parse(String json, Map<Integer, Page> byIndex) throws Exception {
-        JsonNode root = objectMapper.readTree(json);
+        JsonNode root = objectMapper.readTree(extractJsonObject(json));
         String summary = root.path("summary").asText("");
         Map<String, TopicAccumulator> merged = new LinkedHashMap<>();
 
@@ -145,6 +167,18 @@ public class LlmTopicAnalysisService {
             items.get(i).setRank(i + 1);
         }
         return new Analysis(summary, items);
+    }
+
+    private String extractJsonObject(String response) {
+        if (response == null) return "";
+        String value = response.trim()
+                .replaceAll("(?is)<think>.*?</think>", "")
+                .replaceAll("(?is)^```(?:json)?\\s*", "")
+                .replaceAll("(?is)\\s*```$", "")
+                .trim();
+        int start = value.indexOf('{');
+        int end = value.lastIndexOf('}');
+        return start >= 0 && end > start ? value.substring(start, end + 1) : value;
     }
 
     public static class Analysis {

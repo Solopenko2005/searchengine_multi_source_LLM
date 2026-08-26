@@ -2,6 +2,7 @@ package searchengine.services;
 
 import lombok.RequiredArgsConstructor;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.io.MemoryUsageSetting;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.extractor.XWPFWordExtractor;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -21,6 +22,9 @@ import searchengine.repository.TopicRepository;
 import javax.annotation.PreDestroy;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CancellationException;
@@ -57,34 +61,47 @@ public class DocumentIndexingService {
         if (!documentIndexingEnabled) return error("Индексация документов отключена");
         if (files == null || files.length == 0) return error("Не выбран ни один файл");
 
-        List<MultipartFile> snapshots = new ArrayList<>();
+        List<StoredMultipartFile> snapshots = new ArrayList<>();
         try {
+            Path uploadDirectory = Path.of(System.getProperty("java.io.tmpdir"),
+                    "searchengine-indexing-uploads");
+            Files.createDirectories(uploadDirectory);
             for (MultipartFile file : files) {
-                if (file == null || file.isEmpty()) return error("Один из загруженных файлов пуст");
-                if (!SUPPORTED_EXTENSIONS.contains(extractExtension(file.getOriginalFilename()))) {
+                if (file == null || file.isEmpty()) {
+                    snapshots.forEach(StoredMultipartFile::cleanup);
+                    return error("Один из загруженных файлов пуст");
+                }
+                String extension = extractExtension(file.getOriginalFilename());
+                if (!SUPPORTED_EXTENSIONS.contains(extension)) {
+                    snapshots.forEach(StoredMultipartFile::cleanup);
                     return error("Поддерживаются только форматы DOCX и PDF");
                 }
                 if (file.getSize() > maxFileSizeBytes) {
+                    snapshots.forEach(StoredMultipartFile::cleanup);
                     return error("Файл " + file.getOriginalFilename() + " превышает допустимый размер");
                 }
-                snapshots.add(new ByteArrayMultipartFile(file.getName(), file.getOriginalFilename(),
-                        file.getContentType(), file.getBytes()));
+                Path storedFile = Files.createTempFile(uploadDirectory, "document-", "." + extension);
+                file.transferTo(storedFile.toFile());
+                snapshots.add(new StoredMultipartFile(file.getName(), file.getOriginalFilename(),
+                        file.getContentType(), storedFile));
             }
         } catch (IOException e) {
+            snapshots.forEach(StoredMultipartFile::cleanup);
             return error("Не удалось принять загруженные файлы: " + e.getMessage());
         }
 
         String ownerId = currentUserService.getUserId();
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         Set<String> sourceUrls = new HashSet<>();
-        for (MultipartFile file : snapshots) {
+        for (StoredMultipartFile file : snapshots) {
             String sourceUrl = documentSourceUrl(ownerId, safeFileName(file.getOriginalFilename()));
             if (!sourceUrls.add(sourceUrl) || indexingJobService.hasActiveSource(sourceUrl)) {
+                snapshots.forEach(StoredMultipartFile::cleanup);
                 return error("Документ " + file.getOriginalFilename() + " уже индексируется");
             }
         }
         List<String> jobIds = new ArrayList<>();
-        for (MultipartFile file : snapshots) {
+        for (StoredMultipartFile file : snapshots) {
             String name = safeFileName(file.getOriginalFilename());
             String sourceUrl = documentSourceUrl(ownerId, name);
             IndexingJob job = indexingJobService.create(ownerId, SourceType.DOCUMENT, name, sourceUrl, 1);
@@ -102,7 +119,8 @@ public class DocumentIndexingService {
         return response;
     }
 
-    private void runSingleJob(String jobId, String ownerId, MultipartFile file, Authentication authentication) {
+    private void runSingleJob(String jobId, String ownerId, StoredMultipartFile file,
+                              Authentication authentication) {
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
@@ -119,6 +137,7 @@ public class DocumentIndexingService {
             indexingJobService.failed(jobId, e.getMessage());
             logger.error("Ошибка индексации документа {}", file.getOriginalFilename(), e);
         } finally {
+            file.cleanup();
             currentJobId.remove();
             SecurityContextHolder.clearContext();
         }
@@ -231,15 +250,21 @@ public class DocumentIndexingService {
 
     private Site getOrCreateDocumentSite(String ownerId, String fileName) {
         String url = documentSourceUrl(ownerId, fileName);
-        return siteRepository.findByUrl(url).orElseGet(() -> {
-            Site site = new Site();
-            site.setUrl(url);
-            site.setName(fileName);
-            site.setSourceType(SourceType.DOCUMENT);
-            site.setStatus(Status.INDEXING);
-            site.setStatusTime(LocalDateTime.now());
-            return siteRepository.save(site);
+        Site site = siteRepository.findByUrl(url).orElseGet(() -> {
+            Site newSite = new Site();
+            newSite.setUrl(url);
+            newSite.setName(fileName);
+            newSite.setSourceType(SourceType.DOCUMENT);
+            newSite.setStatus(Status.INDEXING);
+            newSite.setStatusTime(LocalDateTime.now());
+            newSite.setOwnerId(ownerId);
+            return siteRepository.save(newSite);
         });
+        if (site.getOwnerId() == null || site.getOwnerId().isBlank()) {
+            site.setOwnerId(ownerId);
+            siteRepository.save(site);
+        }
+        return site;
     }
 
     private String documentSourceUrl(String ownerId, String fileName) {
@@ -270,7 +295,8 @@ public class DocumentIndexingService {
                 return extractor.getText();
             }
         }
-        try (PDDocument document = PDDocument.load(file.getInputStream())) {
+        try (PDDocument document = PDDocument.load(file.getInputStream(),
+                MemoryUsageSetting.setupTempFileOnly())) {
             return new PDFTextStripper().getText(document);
         }
     }
@@ -352,27 +378,42 @@ public class DocumentIndexingService {
         documentExecutor.shutdownNow();
     }
 
-    private static final class ByteArrayMultipartFile implements MultipartFile {
+    /**
+     * Keeps an accepted upload on disk while it waits in the executor queue.
+     * Large batches therefore do not occupy the JVM heap with duplicate byte arrays.
+     */
+    private static final class StoredMultipartFile implements MultipartFile {
         private final String name;
         private final String originalFilename;
         private final String contentType;
-        private final byte[] bytes;
+        private final Path path;
 
-        private ByteArrayMultipartFile(String name, String originalFilename, String contentType, byte[] bytes) {
+        private StoredMultipartFile(String name, String originalFilename, String contentType, Path path) {
             this.name = name;
             this.originalFilename = originalFilename;
             this.contentType = contentType;
-            this.bytes = bytes;
+            this.path = path;
         }
         public String getName() { return name; }
         public String getOriginalFilename() { return originalFilename; }
         public String getContentType() { return contentType; }
-        public boolean isEmpty() { return bytes.length == 0; }
-        public long getSize() { return bytes.length; }
-        public byte[] getBytes() { return bytes.clone(); }
-        public InputStream getInputStream() { return new ByteArrayInputStream(bytes); }
+        public boolean isEmpty() {
+            try { return Files.size(path) == 0; } catch (IOException exception) { return true; }
+        }
+        public long getSize() {
+            try { return Files.size(path); } catch (IOException exception) { return 0; }
+        }
+        public byte[] getBytes() throws IOException { return Files.readAllBytes(path); }
+        public InputStream getInputStream() throws IOException { return Files.newInputStream(path); }
         public void transferTo(File dest) throws IOException {
-            try (FileOutputStream output = new FileOutputStream(dest)) { output.write(bytes); }
+            Files.copy(path, dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        }
+        void cleanup() {
+            try {
+                Files.deleteIfExists(path);
+            } catch (IOException exception) {
+                logger.warn("Не удалось удалить временный файл {}: {}", path, exception.getMessage());
+            }
         }
     }
 }

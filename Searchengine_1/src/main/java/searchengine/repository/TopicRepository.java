@@ -12,6 +12,11 @@ import java.util.List;
 
 @Repository
 public interface TopicRepository extends JpaRepository<Topic, Integer> {
+    interface TopicSummary {
+        String getTheme();
+        Long getFrequency();
+        Long getMentions();
+    }
 
     List<Topic> findByPageId(int pageId);
 
@@ -56,4 +61,11 @@ public interface TopicRepository extends JpaRepository<Topic, Integer> {
     // Альтернативный метод с JOIN
     @Query("SELECT t FROM Topic t JOIN t.topicGroup g WHERE g.id = :groupId")
     List<Topic> findTopicsByGroupId(@Param("groupId") int groupId);
+
+    @Query("SELECT COALESCE(t.topicGroup.title, t.title) AS theme, " +
+            "COUNT(t.id) AS frequency, COUNT(DISTINCT t.site.id) AS mentions " +
+            "FROM Topic t WHERE t.site.id IN :siteIds " +
+            "GROUP BY COALESCE(t.topicGroup.title, t.title) " +
+            "ORDER BY COUNT(t.id) DESC")
+    List<TopicSummary> summarizeBySiteIds(@Param("siteIds") List<Integer> siteIds, Pageable pageable);
 }

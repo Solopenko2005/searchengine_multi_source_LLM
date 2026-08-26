@@ -27,18 +27,18 @@ class RegistrationPageControllerTest {
     @Test
     void validRegistrationRedirectsToLogin() {
         String view = controller.register("Иван", "Иванов", "USER@EXAMPLE.COM",
-                "password1", "password1", new ConcurrentModel());
+                "password1", "password1", "USER", new ConcurrentModel());
 
         assertThat(view).isEqualTo("redirect:/login?registered");
         verify(client).register(new AuthServiceClient.RegistrationCommand(
-                "Иван", "Иванов", "user@example.com", "password1", "password1"));
+                "Иван", "Иванов", "user@example.com", "password1", "password1", "USER"));
     }
 
     @Test
     void passwordMismatchReturnsRegistrationPage() {
         ConcurrentModel model = new ConcurrentModel();
         String view = controller.register("Иван", "Иванов", "user@example.com",
-                "password1", "password2", model);
+                "password1", "password2", "USER", model);
 
         assertThat(view).isEqualTo("register");
         assertThat(model.getAttribute("registrationError")).isEqualTo("Пароли не совпадают");
@@ -52,10 +52,20 @@ class RegistrationPageControllerTest {
         ConcurrentModel model = new ConcurrentModel();
 
         String view = controller.register("Иван", "Иванов", "user@example.com",
-                "password1", "password1", model);
+                "password1", "password1", "USER", model);
 
         assertThat(view).isEqualTo("register");
         assertThat(model.getAttribute("registrationError"))
                 .isEqualTo("Пользователь с таким e-mail уже зарегистрирован");
+    }
+
+    @Test
+    void administratorRegistrationWaitsForEmailVerification() {
+        String view = controller.register("Анна", "Администратор", "admin@example.com",
+                "password1", "password1", "ADMIN", new ConcurrentModel());
+
+        assertThat(view).isEqualTo("redirect:/login?adminVerificationPending");
+        verify(client).register(new AuthServiceClient.RegistrationCommand(
+                "Анна", "Администратор", "admin@example.com", "password1", "password1", "ADMIN"));
     }
 }

@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/changeset/V2__alter_table_users_add_field.sql
+  - include:
+      file: db/changelog/changeset/V3__create_password_reset_token.sql
+  - include:
+      file: db/changelog/changeset/V4__admin_email_verification.sql

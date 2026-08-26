@@ -4,28 +4,28 @@ import lombok.RequiredArgsConstructor;
 import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import searchengine.config.assistant.AssistantConfig;
 import searchengine.dto.assistant.*;
-import searchengine.dto.response.SearchResponse;
-import searchengine.dto.response.SearchResult;
 import searchengine.model.Page;
-import searchengine.model.TopicGroup;
-import searchengine.model.Topic;
+import searchengine.model.Site;
+import searchengine.repository.IndexRepository;
 import searchengine.repository.PageRepository;
+import searchengine.repository.SiteRepository;
 import searchengine.repository.TopicRepository;
-import searchengine.services.AdvancedTopicGroupingService;
 import searchengine.services.EnhancedTopicFilterService;
-import searchengine.services.SearchService;
 import searchengine.services.CurrentUserService;
+import searchengine.services.Lemmatizer;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -47,9 +47,10 @@ public class AssistantService {
 
     private final AssistantConfig config;
     private final LlmClient llmClient;
-    private final SearchService searchService;
+    private final Lemmatizer lemmatizer;
+    private final IndexRepository indexRepository;
     private final PageRepository pageRepository;
-    private final AdvancedTopicGroupingService groupingService;
+    private final SiteRepository siteRepository;
     private final EnhancedTopicFilterService enhancedFilterService;
     private final TopicRepository topicRepository;
     private final LlmTopicAnalysisService llmTopicAnalysisService;
@@ -84,8 +85,8 @@ public class AssistantService {
         // 1. Поиск релевантных документов
         String retrievalQuery = buildRetrievalQuery(question, request.getHistory());
         AssistantProfileService.ResolvedProfile profile = profileService.resolve(
-                request.getDocumentIds(), request.getProfileInstructions());
-        List<RetrievedDoc> docs = retrieveContext(retrievalQuery, request.getSite(), profile.getDocumentIds());
+                request.getSourceIds(), request.getDocumentIds(), request.getProfileInstructions());
+        List<RetrievedDoc> docs = retrieveContext(retrievalQuery, request.getSite(), profile.getSourceIds());
         List<AssistantSource> sources = docs.stream()
                 .map(d -> new AssistantSource(d.index, d.title, d.source, d.url, d.snippet))
                 .collect(Collectors.toList());
@@ -95,8 +96,8 @@ public class AssistantService {
         if (docs.isEmpty()) {
             response.setResult(true);
             response.setUsedLlm(false);
-            response.setAnswer("По загруженным документам не нашлось информации по этому вопросу. "
-                    + "Попробуйте переформулировать запрос или добавить документы на вкладке «Управление».");
+            response.setAnswer("В выбранных источниках не нашлось информации по этому вопросу. "
+                    + "Попробуйте переформулировать запрос или добавить источники на вкладке «Управление».");
             return response;
         }
 
@@ -136,23 +137,25 @@ public class AssistantService {
         TopicsSummaryResponse response = new TopicsSummaryResponse();
         List<TopicItem> items = new ArrayList<>();
         AssistantProfileService.ResolvedProfile profile = profileService.resolve(List.of(), "");
-        Set<Integer> selectedDocumentIds = new HashSet<>(profile.getDocumentIds());
-        if (selectedDocumentIds.isEmpty()) {
+        List<Integer> sourceIds = profile.getSourceIds();
+        if (sourceIds.isEmpty()) {
+            profileService.saveDetectedTopics(List.of());
             response.setResult(true);
             response.setUsedLlm(false);
-            response.setSummary("Выберите хотя бы один документ в профиле ассистента.");
+            response.setSummary("В выбранных источниках пока нет проиндексированных страниц.");
             return response;
         }
 
         if (llmClient.isConfigured()) {
             try {
                 Optional<LlmTopicAnalysisService.Analysis> analysis = llmTopicAnalysisService.analyze(
-                        profile.getDocumentIds(), profile.getInstructions());
+                        sourceIds, profile.getInstructions());
                 if (analysis.isPresent() && !analysis.get().getTopics().isEmpty()) {
                     response.setTopics(analysis.get().getTopics());
                     response.setSummary(analysis.get().getSummary());
                     response.setUsedLlm(true);
                     response.setResult(true);
+                    profileService.saveDetectedTopics(analysis.get().getTopics());
                     return response;
                 }
             } catch (Exception e) {
@@ -162,54 +165,19 @@ public class AssistantService {
         }
 
         try {
-            List<TopicGroup> groups = groupingService.getAllGroupsSorted();
-            List<TopicGroup> filtered = groups.stream()
-                    .filter(g -> {
-                        try {
-                            return enhancedFilterService.isRelevantAndCleanTopic(g);
-                        } catch (Exception ex) {
-                            return g.getFrequency() >= 2;
-                        }
-                    })
-                    .limit(MAX_TOPICS * 10L)
-                    .collect(Collectors.toList());
-
             int rank = 1;
-            for (TopicGroup group : filtered) {
-                List<Topic> accessibleTopics = topicRepository.findByTopicGroupId(group.getId()).stream()
-                        .filter(topic -> currentUserService.canAccess(topic.getPage()))
-                        .filter(topic -> selectedDocumentIds.isEmpty()
-                                || selectedDocumentIds.contains(topic.getPage().getId()))
-                        .collect(Collectors.toList());
-                if (accessibleTopics.isEmpty()) {
-                    continue;
-                }
-                String theme;
-                try {
-                    theme = enhancedFilterService.cleanTopicTitle(group.getTitle());
-                } catch (Exception ex) {
-                    theme = group.getTitle();
-                }
-                if (theme != null && theme.length() > 90) {
-                    theme = theme.substring(0, 90) + "...";
-                }
-
-                List<String> sites;
-                try {
-                    sites = accessibleTopics.stream()
-                            .map(t -> t.getSite() != null ? t.getSite().getName() : null)
-                            .filter(s -> s != null)
-                            .distinct()
-                            .collect(Collectors.toList());
-                } catch (Exception ex) {
-                    sites = new ArrayList<>();
-                }
-
-                items.add(new TopicItem(rank++, theme, accessibleTopics.size(),
-                        sites.size(), sites));
-                if (items.size() >= MAX_TOPICS) {
-                    break;
-                }
+            for (TopicRepository.TopicSummary summary : topicRepository.summarizeBySiteIds(
+                    sourceIds, PageRequest.of(0, MAX_TOPICS * 10))) {
+                String theme = summary.getTheme() == null ? "" : summary.getTheme().trim();
+                try { theme = enhancedFilterService.cleanTopicTitle(theme); }
+                catch (Exception ignored) { }
+                if (theme == null || theme.length() < 3
+                        || enhancedFilterService.isBoilerplateTitle(theme)) continue;
+                if (theme.length() > 90) theme = theme.substring(0, 90) + "...";
+                int frequency = summary.getFrequency() == null ? 0 : summary.getFrequency().intValue();
+                int mentions = summary.getMentions() == null ? 0 : summary.getMentions().intValue();
+                items.add(new TopicItem(rank++, theme, frequency, mentions, List.of()));
+                if (items.size() >= MAX_TOPICS) break;
             }
         } catch (Exception e) {
             logger.error("Ошибка получения тем: {}", e.getMessage(), e);
@@ -218,13 +186,18 @@ public class AssistantService {
             return response;
         }
 
+        if (items.isEmpty()) items.addAll(sourceTitleTopicItems(sourceIds));
+        items.removeIf(item -> enhancedFilterService.isBoilerplateTitle(item.getTheme()));
+        for (int index = 0; index < items.size(); index++) items.get(index).setRank(index + 1);
+
         response.setTopics(items);
 
         if (items.isEmpty()) {
+            profileService.saveDetectedTopics(List.of());
             response.setResult(true);
             response.setUsedLlm(false);
-            response.setSummary("Пока нет данных о темах. Загрузите документы на вкладке «Управление» "
-                    + "и запустите индексацию, чтобы система выделила популярные тематики.");
+            response.setSummary("Проиндексированные источники найдены, но в их тексте пока нет "
+                    + "достаточно устойчивых тематических разделов.");
             return response;
         }
 
@@ -245,7 +218,21 @@ public class AssistantService {
         }
 
         response.setResult(true);
+        profileService.saveDetectedTopics(items);
         return response;
+    }
+
+    private List<TopicItem> sourceTitleTopicItems(List<Integer> sourceIds) {
+        List<TopicItem> result = new ArrayList<>();
+        int rank = 1;
+        for (Site site : siteRepository.findAllById(sourceIds)) {
+            String title = site.getName() == null || site.getName().isBlank() ? site.getUrl() : site.getName();
+            if (title == null || title.isBlank()) continue;
+            if (title.length() > 90) title = title.substring(0, 90) + "...";
+            result.add(new TopicItem(rank++, title, 1, 1, List.of(title)));
+            if (result.size() >= MAX_TOPICS) break;
+        }
+        return result;
     }
 
     /**
@@ -267,105 +254,79 @@ public class AssistantService {
     // Внутренняя логика
     // ---------------------------------------------------------------------
 
-    private List<RetrievedDoc> retrieveContext(String question, String site, List<Integer> documentIds) {
+    private List<RetrievedDoc> retrieveContext(String question, String site, List<Integer> sourceIds) {
         List<RetrievedDoc> docs = new ArrayList<>();
-        if ((documentIds == null || documentIds.isEmpty()) && (site == null || site.isBlank())) {
-            return docs;
-        }
+        if (sourceIds == null || sourceIds.isEmpty()) return docs;
         int maxDocs = Math.max(1, config.getRag().getMaxDocuments());
         int maxChars = Math.max(200, config.getRag().getMaxCharsPerDocument());
-        if (documentIds != null && !documentIds.isEmpty()) {
-            return retrieveSelectedDocuments(question, documentIds, maxDocs, maxChars);
+        List<Integer> scopedSourceIds = new ArrayList<>(new LinkedHashSet<>(sourceIds));
+        if (site != null && !site.isBlank()) {
+            Site selectedSite = siteRepository.findSiteByUrl(site);
+            if (selectedSite == null || !scopedSourceIds.contains(selectedSite.getId())) return docs;
+            scopedSourceIds = List.of(selectedSite.getId());
         }
-        Set<Integer> allowedDocumentIds = documentIds == null
-                ? Set.of()
-                : new HashSet<>(documentIds);
-        Set<Integer> seenPageIds = new HashSet<>();
 
-        SearchResponse sr;
+        List<String> lemmas = new ArrayList<>(lemmatizer.getQueryLemmas(question).keySet());
+        if (lemmas.isEmpty()) return retrieveSelectedSources(question, scopedSourceIds, maxDocs, maxChars);
+
+        List<Integer> rankedPageIds;
         try {
-            sr = searchService.search(question, site, 0, Math.max(maxDocs * 4, maxDocs));
+            rankedPageIds = indexRepository.findTopPageIdsByLemmasAndSiteIds(
+                    lemmas, scopedSourceIds, lemmas.size(), PageRequest.of(0, maxDocs * 4));
         } catch (Exception e) {
             logger.warn("Ошибка поиска контекста: {}", e.getMessage());
-            return docs;
+            return retrieveSelectedSources(question, scopedSourceIds, maxDocs, maxChars);
         }
-
-        if (sr == null || !sr.isResult() || sr.getData() == null || sr.getData().isEmpty()) {
-            return docs;
-        }
-
+        if (rankedPageIds.isEmpty()) return retrieveSelectedSources(question, scopedSourceIds, maxDocs, maxChars);
+        Map<Integer, Page> pagesById = pageRepository.findAllById(rankedPageIds).stream()
+                .collect(Collectors.toMap(Page::getId, Function.identity()));
         int index = 1;
-        for (SearchResult r : sr.getData()) {
-            if (r.getPageId() != null && !seenPageIds.add(r.getPageId())) {
-                continue;
-            }
-            if (!allowedDocumentIds.isEmpty()
-                    && (r.getPageId() == null || !allowedDocumentIds.contains(r.getPageId()))) {
-                continue;
-            }
-            String title = r.getTitle();
-            String content = "";
+        for (Integer pageId : rankedPageIds) {
+            Page page = pagesById.get(pageId);
+            if (page == null || page.getContent() == null || !currentUserService.canAccess(page)) continue;
+            RetrievedDoc doc = toRetrievedDoc(page, question, maxChars, index);
+            if (doc == null) continue;
+            docs.add(doc);
+            index++;
+            if (docs.size() >= maxDocs) break;
+        }
+        return docs.isEmpty() ? retrieveSelectedSources(question, scopedSourceIds, maxDocs, maxChars) : docs;
+    }
 
-            if (r.getPageId() != null) {
-                try {
-                    Optional<Page> pageOpt = pageRepository.findById(r.getPageId());
-                    if (pageOpt.isPresent() && currentUserService.canAccess(pageOpt.get())) {
-                        Page page = pageOpt.get();
-                        content = selectRelevantExcerpt(Jsoup.parse(page.getContent()).text(), question, maxChars);
-                        if ((title == null || title.isBlank())
-                                && page.getOriginalFileName() != null) {
-                            title = page.getOriginalFileName();
-                        }
-                    }
-                } catch (Exception ignored) {
-                }
-            }
-
-            if (content == null || content.isBlank()) {
-                content = stripHtml(r.getSnippet());
-            }
-            content = truncate(content, maxChars);
-
-            if (title == null || title.isBlank()) {
-                title = "Документ #" + index;
-            }
-
-            String url = r.getUrl() != null && !r.getUrl().isBlank()
-                    ? r.getUrl()
-                    : buildUrl(r.getSite(), r.getUri());
-            String snippet = stripHtml(r.getSnippet());
-
-            docs.add(new RetrievedDoc(index++, title, r.getSiteName(), url, snippet, content));
-            if (docs.size() >= maxDocs) {
-                break;
-            }
+    private List<RetrievedDoc> retrieveSelectedSources(String question, List<Integer> sourceIds,
+                                                        int maxDocs, int maxChars) {
+        List<RetrievedDoc> docs = new ArrayList<>();
+        if (sourceIds == null || sourceIds.isEmpty()) return docs;
+        List<Page> pages = pageRepository.findRecentAccessibleBySiteIds(sourceIds,
+                currentUserService.accessibleOwnerIds(), currentUserService.isAdmin(),
+                PageRequest.of(0, maxDocs * 2));
+        int index = 1;
+        for (Page page : pages) {
+            RetrievedDoc doc = toRetrievedDoc(page, question, maxChars, index);
+            if (doc == null) continue;
+            docs.add(doc);
+            index++;
+            if (docs.size() >= maxDocs) break;
         }
         return docs;
     }
 
-    private List<RetrievedDoc> retrieveSelectedDocuments(String question, List<Integer> documentIds,
-                                                          int maxDocs, int maxChars) {
-        List<RetrievedDoc> docs = new ArrayList<>();
-        int index = 1;
-        for (Integer pageId : new java.util.LinkedHashSet<>(documentIds)) {
-            if (pageId == null || pageId <= 0) continue;
-            Optional<Page> pageOpt = pageRepository.findById(pageId);
-            if (pageOpt.isEmpty() || !currentUserService.canAccess(pageOpt.get())) continue;
-
-            Page page = pageOpt.get();
-            String plainText = Jsoup.parse(page.getContent()).text();
-            if (plainText.isBlank()) continue;
-            String excerpt = selectRelevantExcerpt(plainText, question, maxChars);
-            String title = page.getOriginalFileName();
-            if (title == null || title.isBlank()) title = Jsoup.parse(page.getContent()).title();
-            if (title == null || title.isBlank()) title = page.getSite().getName();
-            String url = "/documents/" + page.getId() + "?query="
-                    + URLEncoder.encode(question, StandardCharsets.UTF_8);
-            docs.add(new RetrievedDoc(index++, title, page.getSite().getName(), url,
-                    truncate(excerpt, 500), excerpt));
-            if (docs.size() >= maxDocs) break;
-        }
-        return docs;
+    private RetrievedDoc toRetrievedDoc(Page page, String question, int maxChars, int index) {
+        if (page == null || page.getSite() == null || page.getContent() == null) return null;
+        String plainText = Jsoup.parse(page.getContent()).text();
+        if (plainText.isBlank()) return null;
+        String excerpt = selectRelevantExcerpt(plainText, question, maxChars);
+        String title = page.getOriginalFileName();
+        if (title == null || title.isBlank()) title = Jsoup.parse(page.getContent()).title();
+        if (title == null || title.isBlank()) title = page.getSite().getName();
+        if (title == null || title.isBlank()) title = "Документ #" + index;
+        String url = page.getSite().getSourceType() == searchengine.model.SourceType.DOCUMENT
+                ? "/documents/" + page.getId() + "?query="
+                    + URLEncoder.encode(question, StandardCharsets.UTF_8)
+                : (page.getSite().getSourceType() == searchengine.model.SourceType.SCIENTIFIC_ARTICLE
+                    ? page.getSite().getUrl() : buildUrl(page.getSite().getUrl(), page.getPath()));
+        return new RetrievedDoc(index, title, page.getSite().getName(), url,
+                truncate(excerpt, 500), excerpt);
     }
 
     private List<ChatMessage> buildChatMessages(String question, List<ChatMessage> history,

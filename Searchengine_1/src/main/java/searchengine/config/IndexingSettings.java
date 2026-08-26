@@ -15,7 +15,12 @@ public class IndexingSettings {
 
     private List<SiteConfig> sites;
     private String userAgent;
-    private String referer;
+    private String referrer;
+    private int siteParallelism = 6;
+    private int crawlParallelism = 12;
+    private int maxPagesPerSite = 1000;
+    private int maxDepth = 12;
+    private long requestDelayMillis = 35;
 
 
     @Getter
@@ -40,12 +45,12 @@ public class IndexingSettings {
         this.userAgent = userAgent;
     }
 
-    public String getReferer() {
-        return referer;
+    public String getReferrer() {
+        return referrer;
     }
 
-    public void setReferer(String referer) {
-        this.referer = referer;
+    public void setReferrer(String referrer) {
+        this.referrer = referrer;
     }
 
     public static class SiteConfig {

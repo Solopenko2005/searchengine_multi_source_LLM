@@ -16,6 +16,8 @@ import org.slf4j.LoggerFactory;
 
 import javax.transaction.Transactional;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -53,13 +55,12 @@ public class PageProcessor {
         }
 
         try {
-            String path = url.replace(site.getUrl(), "");
-            if (path.isEmpty()) path = "/";
+            String path = pathFromUrl(url);
 
             Optional<Page> existingPage = pageRepository.findBySiteAndPath(site.getId(), path);
             existingPage.ifPresent(this::deletePageInfo);
 
-            if (pageRepository.existsBySiteAndPath(site, url.replace(site.getUrl(), ""))) {
+            if (pageRepository.existsBySiteAndPath(site, path)) {
                 logger.warn("Страница уже существует: {}", url);
                 return;
             }
@@ -301,11 +302,7 @@ public class PageProcessor {
     private Page savePage(Site site, String url, Document doc) {
         Page page = new Page();
         page.setSite(site);
-        String path = url.replace(site.getUrl(), "");
-        if (path.isEmpty()) {
-            path = "/";
-        }
-        page.setPath(path);
+        page.setPath(pathFromUrl(url));
         page.setCode(doc.connection().response().statusCode());
         page.setContent(doc.html());
         page.setTopicCount(0); // Инициализируем счетчик
@@ -431,8 +428,7 @@ public class PageProcessor {
      */
     @Transactional
     public void deletePageInfoIfExists(Site site, String url) {
-        String path = url.replace(site.getUrl(), "");
-        if (path.isEmpty()) path = "/";
+        String path = pathFromUrl(url);
 
         Optional<Page> existingPage = pageRepository.findBySiteAndPath(site.getId(), path);
         if (existingPage.isPresent()) {
@@ -517,5 +513,19 @@ public class PageProcessor {
      */
     public boolean isIndexingStopped() {
         return isIndexingStopped.get();
+    }
+
+    private String pathFromUrl(String url) {
+        try {
+            URI uri = new URI(url);
+            String path = uri.getRawPath();
+            if (path == null || path.isBlank()) path = "/";
+            if (uri.getRawQuery() != null && !uri.getRawQuery().isBlank()) {
+                path += "?" + uri.getRawQuery();
+            }
+            return path.length() <= 2048 ? path : path.substring(0, 2048);
+        } catch (URISyntaxException exception) {
+            return url.length() <= 2048 ? url : url.substring(0, 2048);
+        }
     }
 }

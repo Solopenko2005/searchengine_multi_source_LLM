@@ -53,6 +53,10 @@ public class LlmClient {
         return config.getLlm().getModel();
     }
 
+    public boolean isLocalProvider() {
+        return isLocalEndpoint(config.getLlm().getBaseUrl());
+    }
+
     /** Выполняет обычную текстовую генерацию. */
     public String complete(List<ChatMessage> messages) {
         return execute(buildRequest(messages, null, null));
@@ -74,7 +78,13 @@ public class LlmClient {
         body.put("model", llm.getModel());
         body.put("store", false);
         int outputTokens = Math.max(128, llm.getMaxOutputTokens());
-        if (localEndpoint) outputTokens = Math.min(outputTokens, 700);
+        if (localEndpoint) {
+            // Structured topic analysis needs substantially more room than a short
+            // chat answer. Truncating it produces invalid JSON and forces fallback.
+            outputTokens = schema == null
+                    ? Math.min(outputTokens, 900)
+                    : Math.max(1200, Math.min(outputTokens, 1800));
+        }
         body.put("max_output_tokens", outputTokens);
         safetyIdentifier().ifPresent(value -> body.put("safety_identifier", value));
 

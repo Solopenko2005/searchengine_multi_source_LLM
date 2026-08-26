@@ -4,82 +4,95 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <title>Вход — поисковая система</title>
+    <title data-i18n-title="auth.login.title">Вход — поисковая система</title>
     <link rel="stylesheet" href="/assets/css/fonts.css">
-    <link rel="stylesheet" href="/assets/css/login.css">
+    <link rel="stylesheet" href="/assets/css/login.css?v=20260811-2">
+    <script defer src="/assets/js/i18n.js?v=20260811-2"></script>
 </head>
 <body>
 <main class="auth-layout">
-    <img class="auth-logo" src="/assets/img/auth-logo.png" alt="Логотип поисковой системы">
+    <div class="LanguageSwitch AuthLanguageSwitch"><button type="button" data-language="ru">RU</button><button type="button" data-language="en">EN</button></div>
+    <img class="auth-logo" src="/assets/img/auth-logo.png" alt="Логотип поисковой системы" data-i18n-alt="auth.logo">
 
     <div class="auth-container">
         <section class="auth-intro" aria-labelledby="welcome-title">
             <div class="auth-intro__content">
-                <h1 id="welcome-title">Привет!</h1>
-                <p>
+                <h1 id="welcome-title" data-i18n="auth.welcome">Привет!</h1>
+                <p data-i18n="auth.intro">
                     Мы создали эту систему для поиска информации в научных статьях,
                     учебных материалах и технической документации, чтобы вы могли удобно
                     и точно получать нужную академическую информацию без рекламы и
                     информационного шума. Приятного пользования!
                 </p>
-                <a class="auth-secondary-action" href="/register" th:if="${registrationEnabled}">
+                <a class="auth-secondary-action" href="/register" th:if="${registrationEnabled}" data-i18n="auth.signup">
                     Регистрация
                 </a>
                 <span class="auth-secondary-action auth-secondary-action_disabled"
                       th:unless="${registrationEnabled}"
-                      title="Сервис регистрации отключён в настройках">
+                      title="Сервис регистрации отключён в настройках" data-i18n="auth.signup" data-i18n-title="auth.signup.disabled">
                     Регистрация
                 </span>
             </div>
 
             <footer class="auth-footer">
-                <span>Поисковая система</span>
-                <span>Язык: <strong>Русский</strong></span>
+                <span data-i18n="app.name">Поисковая система</span>
+                <span data-language-label><span data-i18n="language.label">Язык:</span> <strong data-i18n="language.ru">Русский</strong></span>
             </footer>
         </section>
 
         <section class="login-card" aria-labelledby="login-title">
-            <h2 id="login-title">Войдите в аккаунт</h2>
+            <h2 id="login-title" data-i18n="auth.signin.title">Войдите в аккаунт</h2>
 
             <div class="login-message login-message_error" role="alert" th:if="${param.error}">
-                Неверный логин или пароль. Проверьте данные и попробуйте ещё раз.
+                <span data-i18n="auth.error.credentials">Неверный логин или пароль. Проверьте данные и попробуйте ещё раз.</span>
             </div>
             <div class="login-message login-message_success" role="status" th:if="${param.logout}">
-                Вы успешно вышли из системы.
+                <span data-i18n="auth.logout.success">Вы успешно вышли из системы.</span>
             </div>
             <div class="login-message login-message_success" role="status" th:if="${param.registered}">
-                Регистрация завершена. Теперь войдите по e-mail и паролю.
+                <span data-i18n="auth.signup.success">Регистрация завершена. Теперь войдите по e-mail и паролю.</span>
+            </div>
+            <div class="login-message login-message_success" role="status" th:if="${param.adminVerificationPending}">
+                <span data-i18n="auth.admin.pending">Проверьте почту и подтвердите e-mail. После этого вы сможете войти как администратор.</span>
+            </div>
+            <div class="login-message login-message_success" role="status" th:if="${param.adminVerified}">
+                <span data-i18n="auth.admin.verified">E-mail подтверждён. Права администратора активированы.</span>
+            </div>
+            <div class="login-message login-message_error" role="alert" th:if="${param.adminVerificationError}">
+                <span data-i18n="auth.admin.verifyError">Ссылка подтверждения недействительна или её срок истёк.</span>
+            </div>
+            <div class="login-message login-message_success" role="status" th:if="${param.passwordReset}">
+                <span data-i18n="auth.password.changed">Пароль изменён. Теперь войдите с новым паролем.</span>
             </div>
 
-            <form class="login-form" th:action="@{/login}" method="post">
+            <form class="login-form" th:action="@{/login}" method="post" autocomplete="off">
                 <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
 
                 <div class="login-field">
-                    <label for="username">Логин или e-mail</label>
-                    <input id="username" name="username" type="text" autocomplete="username"
+                    <label for="username" data-i18n="auth.username">Логин или e-mail</label>
+                    <input id="username" name="username" type="text" autocomplete="off" data-lpignore="true"
                            autocapitalize="none" spellcheck="false" required autofocus>
                 </div>
 
                 <div class="login-field">
-                    <label for="password">Пароль</label>
+                    <label for="password" data-i18n="auth.password">Пароль</label>
                     <input id="password" name="password" type="password"
-                           autocomplete="current-password" required>
-                    <button class="password-toggle" type="button" aria-label="Показать пароль"
+                           autocomplete="off" data-lpignore="true" required>
+                    <button class="password-toggle" type="button" aria-label="Показать пароль" data-i18n-aria-label="auth.password.show"
                             aria-pressed="false" data-password-toggle>
                         <span aria-hidden="true"></span>
                     </button>
                 </div>
 
                 <div class="login-actions">
-                    <button class="login-submit" type="submit">Войти</button>
-                    <span class="login-help"
-                          title="Восстановление пароля будет доступно во внешнем сервисе авторизации">
+                    <button class="login-submit" type="submit" data-i18n="auth.signin">Войти</button>
+                    <a class="login-help" href="/forgot-password" th:if="${registrationEnabled}" data-i18n="auth.forgot">
                         Забыли пароль?
-                    </span>
+                    </a>
                 </div>
             </form>
 
-            <p class="login-note">
+            <p class="login-note" data-i18n="auth.redirect.note">
                 После входа вы автоматически перейдёте в поисковую систему.
             </p>
         </section>
@@ -102,6 +115,11 @@
 
 <script>
     (function () {
+        window.addEventListener('pageshow', function (event) {
+            if (!event.persisted) return;
+            var form = document.querySelector('.login-form');
+            if (form) form.reset();
+        });
         var toggle = document.querySelector('[data-password-toggle]');
         var password = document.getElementById('password');
         if (!toggle || !password) return;
@@ -109,7 +127,10 @@
             var visible = password.type === 'text';
             password.type = visible ? 'password' : 'text';
             toggle.setAttribute('aria-pressed', String(!visible));
-            toggle.setAttribute('aria-label', visible ? 'Показать пароль' : 'Скрыть пароль');
+            var t = window.AppI18n && window.AppI18n.t;
+            toggle.setAttribute('aria-label', visible
+                ? (t ? t('Показать пароль', 'Show password') : 'Показать пароль')
+                : (t ? t('Скрыть пароль', 'Hide password') : 'Скрыть пароль'));
         });
     }());
 </script>

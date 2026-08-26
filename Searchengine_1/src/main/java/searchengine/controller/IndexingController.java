@@ -10,6 +10,7 @@ import searchengine.services.DocumentIndexingService;
 import searchengine.services.SiteIndexingService;
 import searchengine.services.IndexingStatusService;
 import searchengine.services.IndexingJobService;
+import searchengine.services.SourceImportService;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -21,6 +22,7 @@ public class IndexingController {
     private final DocumentIndexingService documentIndexingService;
     private final IndexingStatusService indexingStatusService;
     private final IndexingJobService indexingJobService;
+    private final SourceImportService sourceImportService;
 
     @PostMapping("/startIndexing")
     public Map<String, Object> startIndexing() {
@@ -48,6 +50,12 @@ public class IndexingController {
         return siteIndexingService.addSite(url, name).getBody();
     }
 
+    @PostMapping("/addPage")
+    public ResponseEntity<Map<String, Object>> addPage(@RequestParam String url,
+                                                        @RequestParam(required = false) String name) {
+        return siteIndexingService.addPage(url, name);
+    }
+
     /**
      * Загружает и индексирует один или сразу несколько документов (DOCX/PDF)
      * как самостоятельные источники информации.
@@ -73,6 +81,14 @@ public class IndexingController {
     @GetMapping("/indexing/status")
     public Map<String, Object> indexingStatus() {
         return indexingStatusService.getStatus();
+    }
+
+    @PostMapping(value = "/importSources", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> importSources(@RequestParam("file") MultipartFile file) {
+        Map<String, Object> result = sourceImportService.importSources(file);
+        return Boolean.TRUE.equals(result.get("result"))
+                ? ResponseEntity.accepted().body(result)
+                : ResponseEntity.badRequest().body(result);
     }
 
     @GetMapping("/indexing/jobs")

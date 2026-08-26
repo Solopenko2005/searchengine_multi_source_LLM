@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jsoup.parser.Parser;
 import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +22,8 @@ import javax.annotation.PreDestroy;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.SocketTimeoutException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -44,9 +47,10 @@ public class SiteIndexingService {
 
     private static final Logger logger = LoggerFactory.getLogger(SiteIndexingService.class);
     private ForkJoinPool pool;
-    private final ExecutorService siteCoordinator = Executors.newFixedThreadPool(4);
+    private ExecutorService siteCoordinator;
     private static final int MAX_RETRIES = 3;
     private static final int TIMEOUT = 10000;
+    private static final int MAX_SITEMAP_FILES = 24;
 
     /**
      * Запускает полную индексацию всех сайтов из конфигурации indexing-settings.sites.
@@ -99,8 +103,8 @@ public class SiteIndexingService {
                         "error", "URL источника не может быть пустым"
                 ));
             }
-            String trimmedUrl = url.trim();
-            if (!isValidUrl(trimmedUrl)) {
+            String trimmedUrl = normalizeUrl(url.trim());
+            if (trimmedUrl == null || !isValidUrl(trimmedUrl)) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "result", false,
                         "error", "Некорректный URL"
@@ -142,16 +146,12 @@ public class SiteIndexingService {
      * общий флаг «идёт индексация» будет снят автоматически.
      */
     private String launchSiteCrawl(String url, String name) {
-        String ownerId;
-        try {
-            ownerId = currentUserService.getUserId();
-        } catch (IllegalStateException ignored) {
-            ownerId = "system";
-        }
+        ensureSiteCoordinatorAvailable();
+        String ownerId = currentOwnerId();
         IndexingJob job = indexingJobService.create(ownerId, SourceType.WEBSITE, name, url, 1);
         indexingState.taskStarted();
         CompletableFuture<Void> future = CompletableFuture
-                .runAsync(() -> crawlSite(url, name, job.getId()), siteCoordinator)
+                .runAsync(() -> crawlSite(url, name, job.getId(), ownerId), siteCoordinator)
                 .whenComplete((result, error) -> {
                     if (error != null) {
                         logger.error("Непредвиденная ошибка обхода сайта {}: {}", url, error.getMessage(), error);
@@ -166,8 +166,8 @@ public class SiteIndexingService {
      * Синхронно обходит один сайт целиком и по завершении выставляет итоговый статус:
      * INDEXED — если обход завершился нормально, FAILED — если была запрошена остановка.
      */
-    private void crawlSite(String url, String name, String jobId) {
-        Site site = getOrCreateSite(url, name);
+    private void crawlSite(String url, String name, String jobId, String ownerId) {
+        Site site = getOrCreateSite(url, name, ownerId);
         try {
             site.setStatus(Status.INDEXING);
             site.setStatusTime(LocalDateTime.now());
@@ -177,8 +177,8 @@ public class SiteIndexingService {
 
             if (!indexingJobService.isStopRequested(jobId)) {
                 // синхронный запуск: метод вернётся только когда обход сайта завершится
-                pool.invoke(new SiteIndexingTask(site, site.getUrl(), 0, jobId,
-                        ConcurrentHashMap.newKeySet()));
+                Set<String> visitedUrls = ConcurrentHashMap.newKeySet();
+                pool.invoke(new SiteSeedTask(site, site.getUrl(), jobId, visitedUrls));
             }
 
             Site finalSite = siteRepository.findByUrl(url).orElse(site);
@@ -203,7 +203,11 @@ public class SiteIndexingService {
     }
 
     private Site getOrCreateSite(String url, String name) {
-        return siteRepository.findByUrl(url)
+        return getOrCreateSite(url, name, currentOwnerId());
+    }
+
+    private Site getOrCreateSite(String url, String name, String ownerId) {
+        Site site = siteRepository.findByUrl(url)
                 .orElseGet(() -> {
                     Site newSite = new Site();
                     newSite.setUrl(url);
@@ -213,6 +217,13 @@ public class SiteIndexingService {
                     newSite.setStatusTime(LocalDateTime.now());
                     return newSite;
                 });
+        if (site.getOwnerId() == null || site.getOwnerId().isBlank()) site.setOwnerId(ownerId);
+        return site;
+    }
+
+    private String currentOwnerId() {
+        try { return currentUserService.getUserId(); }
+        catch (IllegalStateException ignored) { return "system"; }
     }
 
     /**
@@ -220,7 +231,16 @@ public class SiteIndexingService {
      */
     private synchronized void ensurePoolAvailable() {
         if (pool == null || pool.isShutdown() || pool.isTerminated()) {
-            pool = new ForkJoinPool(Runtime.getRuntime().availableProcessors());
+            int configured = Math.max(4, indexingSettings.getCrawlParallelism());
+            int parallelism = Math.min(32, Math.max(configured, Runtime.getRuntime().availableProcessors() * 2));
+            pool = new ForkJoinPool(parallelism);
+        }
+    }
+
+    private synchronized void ensureSiteCoordinatorAvailable() {
+        if (siteCoordinator == null || siteCoordinator.isShutdown() || siteCoordinator.isTerminated()) {
+            int parallelism = Math.max(2, Math.min(12, indexingSettings.getSiteParallelism()));
+            siteCoordinator = Executors.newFixedThreadPool(parallelism);
         }
     }
 
@@ -335,6 +355,7 @@ public class SiteIndexingService {
                             newSite.setSourceType(SourceType.WEBSITE);
                             newSite.setStatus(Status.INDEXING);
                             newSite.setStatusTime(LocalDateTime.now());
+                            newSite.setOwnerId(currentOwnerId());
                             return newSite;
                         }))
                 .orElse(null);
@@ -357,17 +378,31 @@ public class SiteIndexingService {
                     throw new IOException("Задача прервана");
                 }
 
-                Thread.sleep(500);
+                long delay = Math.max(0, indexingSettings.getRequestDelayMillis());
+                if (delay > 0) Thread.sleep(delay);
                 long startTime = System.currentTimeMillis();
-                Connection.Response response = Jsoup.connect(url)
-                        .userAgent("HeliontSearchBot")
+                Connection connection = Jsoup.connect(url)
+                        .userAgent(indexingSettings.getUserAgent())
                         .timeout(TIMEOUT)
-                        .execute();
+                        .followRedirects(true)
+                        .ignoreHttpErrors(true)
+                        .ignoreContentType(true);
+                if (indexingSettings.getReferrer() != null && !indexingSettings.getReferrer().isBlank()) {
+                    connection.referrer(indexingSettings.getReferrer());
+                }
+                Connection.Response response = connection.execute();
 
                 logger.info("Запрос к {} выполнен за {} мс", url, System.currentTimeMillis() - startTime);
 
                 if (response.statusCode() >= 400) {
                     logger.warn("HTTP-ошибка {}: {}", response.statusCode(), url);
+                    return null;
+                }
+
+                String contentType = response.contentType();
+                if (contentType == null || !(contentType.contains("html")
+                        || contentType.contains("xml") || contentType.startsWith("text/"))) {
+                    logger.debug("Пропущен неподдерживаемый тип {}: {}", contentType, url);
                     return null;
                 }
 
@@ -395,7 +430,8 @@ public class SiteIndexingService {
 
         public SiteIndexingTask(Site site, String url, int depth, String jobId, Set<String> visitedUrls) {
             this.site = site;
-            this.url = url;
+            String normalized = normalizeUrl(url);
+            this.url = normalized == null ? url : normalized;
             this.depth = depth;
             this.jobId = jobId;
             this.visitedUrls = visitedUrls;
@@ -404,7 +440,14 @@ public class SiteIndexingService {
         @Override
         protected Void compute() {
             try {
-                if (indexingJobService.isStopRequested(jobId) || !visitedUrls.add(url)) {
+                int maxPages = Math.max(1, indexingSettings.getMaxPagesPerSite());
+                if (indexingJobService.isStopRequested(jobId) || visitedUrls.size() >= maxPages || !visitedUrls.add(url)) {
+                    return null;
+                }
+                if (visitedUrls.size() > maxPages) {
+                    visitedUrls.remove(url);
+                    logger.info("Для {} достигнут безопасный лимит {} страниц", site.getUrl(),
+                            maxPages);
                     return null;
                 }
                 if (depth > 0) indexingJobService.recordDiscovered(jobId);
@@ -418,10 +461,12 @@ public class SiteIndexingService {
                 savePageAndLemmas(site, url, document, jobId);
                 indexingJobService.recordProcessed(jobId, true);
 
-                if (depth < 10 && !indexingJobService.isStopRequested(jobId)) {
+                if (depth < Math.max(1, indexingSettings.getMaxDepth()) && !indexingJobService.isStopRequested(jobId)) {
                     Elements links = document.select("a[href]");
                     List<SiteIndexingTask> subTasks = links.stream()
                             .map(link -> link.absUrl("href"))
+                            .map(SiteIndexingService.this::normalizeUrl)
+                            .filter(Objects::nonNull)
                             .filter(this::isValidUrl)
                             .map(link -> new SiteIndexingTask(site, link, depth + 1, jobId, visitedUrls))
                             .collect(Collectors.toList());
@@ -438,13 +483,91 @@ public class SiteIndexingService {
         }
 
         private boolean isValidUrl(String url) {
-            return url.startsWith(site.getUrl()) &&
+            return belongsToSite(site.getUrl(), url) &&
                     !visitedUrls.contains(url) &&
-                    !url.contains("#") &&
-                    !url.endsWith(".jpg") &&
-                    !url.endsWith(".png") &&
-                    !url.endsWith(".pdf");
+                    isIndexablePageUrl(url);
         }
+    }
+
+    private class SiteSeedTask extends RecursiveAction {
+        private final Site site;
+        private final String rootUrl;
+        private final String jobId;
+        private final Set<String> visitedUrls;
+
+        private SiteSeedTask(Site site, String rootUrl, String jobId, Set<String> visitedUrls) {
+            this.site = site;
+            this.rootUrl = rootUrl;
+            this.jobId = jobId;
+            this.visitedUrls = visitedUrls;
+        }
+
+        @Override
+        protected void compute() {
+            SiteIndexingTask root = new SiteIndexingTask(site, rootUrl, 0, jobId, visitedUrls);
+            RecursiveAction sitemap = new RecursiveAction() {
+                @Override
+                protected void compute() {
+                    List<SiteIndexingTask> tasks = discoverSitemapUrls(rootUrl, jobId).stream()
+                            .map(url -> new SiteIndexingTask(site, url, 1, jobId, visitedUrls))
+                            .collect(Collectors.toList());
+                    invokeAll(tasks);
+                }
+            };
+            invokeAll(root, sitemap);
+        }
+    }
+
+    private List<String> discoverSitemapUrls(String rootUrl, String jobId) {
+        LinkedHashSet<String> pages = new LinkedHashSet<>();
+        ArrayDeque<String> sitemapQueue = new ArrayDeque<>();
+        Set<String> visitedSitemaps = new HashSet<>();
+        int pageLimit = Math.max(1, indexingSettings.getMaxPagesPerSite());
+        try {
+            URI root = new URI(rootUrl);
+            String origin = new URI(root.getScheme(), null, root.getHost(), root.getPort(), "/", null, null).toString();
+            sitemapQueue.add(origin + "sitemap.xml");
+        } catch (URISyntaxException ignored) {
+            return List.of();
+        }
+
+        while (!sitemapQueue.isEmpty() && visitedSitemaps.size() < MAX_SITEMAP_FILES
+                && pages.size() < pageLimit && !indexingJobService.isStopRequested(jobId)) {
+            String sitemapUrl = sitemapQueue.removeFirst();
+            if (!visitedSitemaps.add(sitemapUrl)) continue;
+            try {
+                Connection.Response response = Jsoup.connect(sitemapUrl)
+                        .userAgent(indexingSettings.getUserAgent())
+                        .timeout(TIMEOUT)
+                        .followRedirects(true)
+                        .ignoreHttpErrors(true)
+                        .ignoreContentType(true)
+                        .execute();
+                if (response.statusCode() >= 400) continue;
+                Document xml = Jsoup.parse(response.body(), response.url().toString(), Parser.xmlParser());
+                for (org.jsoup.nodes.Element loc : xml.select("loc")) {
+                    String normalized = normalizeUrl(loc.text());
+                    if (normalized == null || !belongsToSite(rootUrl, normalized)) continue;
+                    String lower = normalized.toLowerCase(Locale.ROOT);
+                    if (lower.endsWith(".xml") || lower.endsWith(".xml.gz")) {
+                        if (visitedSitemaps.size() + sitemapQueue.size() < MAX_SITEMAP_FILES) sitemapQueue.addLast(normalized);
+                    } else if (isIndexablePageUrl(normalized)) {
+                        pages.add(normalized);
+                        if (pages.size() >= pageLimit) break;
+                    }
+                }
+            } catch (Exception exception) {
+                logger.debug("Карта сайта {} недоступна: {}", sitemapUrl, exception.getMessage());
+            }
+        }
+        logger.info("Для {} найдено {} URL через sitemap", rootUrl, pages.size());
+        return new ArrayList<>(pages);
+    }
+
+    private boolean isIndexablePageUrl(String url) {
+        String lower = url.toLowerCase(Locale.ROOT);
+        return !lower.matches(".*\\.(jpg|jpeg|png|gif|svg|webp|pdf|doc|docx|xls|xlsx|zip|rar|7z|mp3|mp4|xml|gz)(\\?.*)?$")
+                && !lower.matches(".*(/login|/logout|/signin|/signup|/admin)(/.*)?$");
     }
 
     @Transactional(rollbackFor = Exception.class, timeout = 30)
@@ -506,17 +629,128 @@ public class SiteIndexingService {
     private Page createPage(Site site, String url, Document document) {
         Page page = new Page();
         page.setSite(site);
-        String path = url.replace(site.getUrl(), "");
-        page.setPath(path.isEmpty() ? "/" : path);
+        page.setPath(pathFromUrl(url));
         page.setCode(document.connection().response().statusCode());
         page.setContent(document.outerHtml());
         page.setTopicCount(0);
         return page;
     }
 
+    /** Adds one URL as an independent source without recursively crawling its domain. */
+    public synchronized ResponseEntity<Map<String, Object>> addPage(String url, String name) {
+        ensureSiteCoordinatorAvailable();
+        String normalized = normalizeUrl(url);
+        if (normalized == null || !isValidUrl(normalized)) {
+            return ResponseEntity.badRequest().body(Map.of("result", false, "error", "Некорректный URL"));
+        }
+        if (indexingJobService.hasActiveSource(normalized)) {
+            return ResponseEntity.badRequest().body(Map.of("result", false,
+                    "error", "Этот источник уже индексируется"));
+        }
+        String sourceName = name == null || name.isBlank() ? normalized : name.trim();
+        String ownerId = currentOwnerId();
+        IndexingJob job = indexingJobService.create(ownerId, SourceType.WEBSITE,
+                sourceName, normalized, 1);
+        indexingState.taskStarted();
+        CompletableFuture<Void> future = CompletableFuture.runAsync(
+                () -> indexSingleSource(normalized, sourceName, job.getId(), ownerId), siteCoordinator)
+                .whenComplete((ignored, error) -> indexingState.taskFinished());
+        indexingJobService.attachFuture(job.getId(), future);
+        return ResponseEntity.accepted().body(Map.of("result", true, "jobId", job.getId(),
+                "message", "Страница принята и добавлена в очередь"));
+    }
+
+    private void indexSingleSource(String url, String name, String jobId, String ownerId) {
+        Site site = getOrCreateSite(url, name, ownerId);
+        try {
+            site.setStatus(Status.INDEXING);
+            site.setStatusTime(LocalDateTime.now());
+            site.setLastError(null);
+            databaseService.saveSite(site);
+            indexingJobService.markRunning(jobId, site.getId(), "Загрузка страницы");
+            Document document = fetchDocumentWithRetries(url, jobId);
+            if (document == null) throw new IOException("Страница не содержит доступного HTML-текста");
+            savePageAndLemmas(site, url, document, jobId);
+            indexingJobService.recordProcessed(jobId, true);
+            indexingJobService.complete(jobId);
+            site.setStatus(Status.INDEXED);
+            site.setLastError(null);
+        } catch (Exception exception) {
+            indexingJobService.failed(jobId, exception.getMessage());
+            site.setStatus(indexingJobService.isStopRequested(jobId) ? Status.STOPPED : Status.FAILED);
+            site.setLastError(exception.getMessage());
+            logger.warn("Не удалось проиндексировать отдельную страницу {}: {}", url, exception.getMessage());
+        } finally {
+            site.setStatusTime(LocalDateTime.now());
+            databaseService.saveSite(site);
+        }
+    }
+
+    /** Normalizes redirects, fragments and common tracking parameters before de-duplication. */
+    private String normalizeUrl(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            URI uri = new URI(value.trim());
+            String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
+            if (!scheme.equals("http") && !scheme.equals("https")) return null;
+            String host = uri.getHost();
+            if (host == null || host.isBlank()) return null;
+            String path = uri.getRawPath();
+            if (path == null || path.isBlank()) path = "/";
+            if (path.length() > 1 && path.endsWith("/")) path = path.substring(0, path.length() - 1);
+            String query = stripTrackingParameters(uri.getRawQuery());
+            return new URI(scheme, null, host.toLowerCase(Locale.ROOT), uri.getPort(), path,
+                    query, null).toASCIIString();
+        } catch (URISyntaxException exception) {
+            return null;
+        }
+    }
+
+    private boolean belongsToSite(String rootUrl, String candidateUrl) {
+        try {
+            String rootHost = normalizedHost(new URI(rootUrl).getHost());
+            String candidateHost = normalizedHost(new URI(candidateUrl).getHost());
+            return rootHost != null && rootHost.equals(candidateHost);
+        } catch (URISyntaxException exception) {
+            return false;
+        }
+    }
+
+    private String normalizedHost(String host) {
+        if (host == null) return null;
+        String result = host.toLowerCase(Locale.ROOT);
+        return result.startsWith("www.") ? result.substring(4) : result;
+    }
+
+    private String stripTrackingParameters(String rawQuery) {
+        if (rawQuery == null || rawQuery.isBlank()) return null;
+        String cleaned = Arrays.stream(rawQuery.split("&"))
+                .filter(parameter -> {
+                    String key = parameter.split("=", 2)[0].toLowerCase(Locale.ROOT);
+                    return !key.startsWith("utm_") && !key.equals("fbclid")
+                            && !key.equals("gclid") && !key.equals("yclid");
+                })
+                .collect(Collectors.joining("&"));
+        return cleaned.isBlank() ? null : cleaned;
+    }
+
+    private String pathFromUrl(String url) {
+        try {
+            URI uri = new URI(url);
+            String path = uri.getRawPath();
+            if (path == null || path.isBlank()) path = "/";
+            if (uri.getRawQuery() != null && !uri.getRawQuery().isBlank()) {
+                path += "?" + uri.getRawQuery();
+            }
+            return path.length() <= 2048 ? path : path.substring(0, 2048);
+        } catch (URISyntaxException exception) {
+            return url.length() <= 2048 ? url : url.substring(0, 2048);
+        }
+    }
+
     @PreDestroy
     void shutdownExecutors() {
-        siteCoordinator.shutdownNow();
+        if (siteCoordinator != null) siteCoordinator.shutdownNow();
         if (pool != null) pool.shutdownNow();
     }
 

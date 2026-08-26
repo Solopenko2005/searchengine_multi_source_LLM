@@ -1933,13 +1933,19 @@ var DocumentUpload = function(){
                 }
 
                 var originalText = $submitBtn.text();
-                $submitBtn.prop('disabled', true).text('Индексация...');
-                showMessage($form, true, 'Загрузка и индексация ' + files.length + ' файл(ов)...');
+                $submitBtn.prop('disabled', true).text('Загрузка 0%');
+                var names = Array.prototype.map.call(files, function(file){ return file.name; }).join(', ');
+                showMessage($form, true, 'Получены файлы: ' + names + '. Загрузка на сервер: 0%');
 
                 $form.ajaxSubmit({
                     url: backendApiUrl + '/uploadDocument',
                     type: 'POST',
                     dataType: 'json',
+                    uploadProgress: function(event, position, total, percent){
+                        var progress = Math.max(0, Math.min(100, Number(percent || 0)));
+                        $submitBtn.text('Загрузка ' + progress + '%');
+                        showMessage($form, true, 'Получены файлы: ' + names + '. Загрузка на сервер: ' + progress + '%');
+                    },
                     success: function(result){
                         if (result) {
                             showReport($form, result);
@@ -1948,8 +1954,10 @@ var DocumentUpload = function(){
                             showMessage($form, false, 'Пустой ответ сервера');
                         }
                     },
-                    error: function(){
-                        showMessage($form, false, 'Ошибка загрузки документов');
+                    error: function(xhr){
+                        var response = xhr && xhr.responseJSON;
+                        showMessage($form, false, response && response.error
+                            ? response.error : 'Ошибка загрузки документов (HTTP ' + (xhr.status || 0) + ')');
                     },
                     complete: function(){
                         $submitBtn.prop('disabled', false).text(originalText);

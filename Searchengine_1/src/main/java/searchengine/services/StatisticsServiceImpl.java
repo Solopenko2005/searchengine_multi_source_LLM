@@ -24,17 +24,21 @@ public class StatisticsServiceImpl implements StatisticsService {
     private final LemmaRepository lemmaRepository;
     private final TopicRepository topicRepository;
     private final IndexingState indexingState;
+    private final CurrentUserService currentUserService;
 
     @Override
     public StatisticsResponse getStatistics() {
         TotalStatistics totalStatistics = new TotalStatistics();
-        totalStatistics.setSites((int) siteRepository.count());
-        totalStatistics.setPages((int) pageRepository.count());
-        totalStatistics.setLemmas((int) lemmaRepository.count());
+        var accessibleSites = siteRepository.findAll().stream()
+                .filter(currentUserService::canAccess)
+                .collect(Collectors.toList());
+        totalStatistics.setSites(accessibleSites.size());
+        totalStatistics.setPages(accessibleSites.stream().mapToInt(pageRepository::countBySite).sum());
+        totalStatistics.setLemmas(accessibleSites.stream().mapToInt(lemmaRepository::countBySite).sum());
         // реальное состояние: идёт ли индексация прямо сейчас (сайты или документы)
         totalStatistics.setIndexing(indexingState.isIndexingInProgress());
 
-        List<DetailedStatisticsItem> detailed = siteRepository.findAll().stream()
+        List<DetailedStatisticsItem> detailed = accessibleSites.stream()
                 .map(site -> {
                     DetailedStatisticsItem item = new DetailedStatisticsItem();
                     item.setUrl(site.getUrl());

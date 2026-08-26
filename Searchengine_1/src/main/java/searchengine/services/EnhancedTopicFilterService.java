@@ -4,6 +4,8 @@ import org.springframework.stereotype.Service;
 import searchengine.model.TopicGroup;
 
 import java.util.HashSet;
+import java.text.Normalizer;
+import java.util.Locale;
 import java.util.Set;
 
 @Service
@@ -52,6 +54,15 @@ public class EnhancedTopicFilterService {
         add("реализация зерна российскими сельхозорганизациями");
         add("16 30 18 00 вечерняя сессия");
         add("цифровые финансовые активы в апк");
+        add("последние новости");
+        add("популярное");
+        add("логин");
+        add("использование куки-файлов");
+        add("использование файлов cookie");
+        add("для цитирования");
+        add("for citation");
+        add("полный текст");
+        add("full text");
     }};
 
     private static final Set<String> STOP_KEYWORDS = new HashSet<>() {{
@@ -80,7 +91,8 @@ public class EnhancedTopicFilterService {
     public boolean isRelevantAndCleanTopic(TopicGroup group) {
         if (group == null) return false;
 
-        String title = group.getTitle().toLowerCase();
+        if (group.getTitle() == null || group.getTitle().isBlank()) return false;
+        String title = normalize(group.getTitle());
 
         // Проверяем слишком длинные заголовки (вероятно содержат весь текст)
         if (title.length() > 300) {
@@ -115,6 +127,24 @@ public class EnhancedTopicFilterService {
         }
 
         return true;
+    }
+
+    public boolean isBoilerplateTitle(String value) {
+        String title = normalize(value);
+        if (title.isBlank()) return true;
+        for (String stopTitle : STOP_TITLES) {
+            if (title.contains(normalize(stopTitle))) return true;
+        }
+        return false;
+    }
+
+    private String normalize(String value) {
+        if (value == null) return "";
+        return Normalizer.normalize(value, Normalizer.Form.NFKC)
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[\\p{Z}\\s]+", " ")
+                .replaceAll("^[\\p{Punct}\\s]+|[\\p{Punct}\\s]+$", "")
+                .trim();
     }
 
     /**

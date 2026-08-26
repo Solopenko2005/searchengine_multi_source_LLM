@@ -43,12 +43,51 @@ if ($llmProvider -match '(?i)lm\s*studio') {
             if ([string]::IsNullOrWhiteSpace($llmModel)) {
                 $llmModel = 'local-qwen3-8b'
             }
-            $loadedModels = (& $lmsExecutable ps 2>$null | Out-String)
+            $previousErrorActionPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            $loadedModels = (& $lmsExecutable ps 2>&1 | Out-String)
+            $ErrorActionPreference = $previousErrorActionPreference
             if ($loadedModels -notmatch [regex]::Escape($llmModel)) {
                 Write-Host "Loading the LM Studio model $llmModel..."
                 & $lmsExecutable load 'qwen/qwen3-8b' --identifier $llmModel --parallel 2 --yes | Out-Null
             }
         }
+    }
+}
+
+$mailUsername = Get-LocalEnvValue 'MAIL_USERNAME'
+$mailPassword = Get-LocalEnvValue 'MAIL_PASSWORD'
+if ($mailUsername -and $mailPassword -and -not (Get-NetTCPConnection -State Listen -LocalPort 8771 -ErrorAction SilentlyContinue)) {
+    Start-Process powershell.exe `
+        -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'scripts\run-email-local.ps1')) `
+        -WorkingDirectory $root `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $logs 'email-sender.out.log') `
+        -RedirectStandardError (Join-Path $logs 'email-sender.err.log') | Out-Null
+} elseif (-not $mailUsername -or -not $mailPassword) {
+    Write-Warning 'MAIL_USERNAME/MAIL_PASSWORD are not configured. Password recovery is ready but cannot send email yet.'
+}
+
+if ($mailUsername -and $mailPassword) {
+    $normalizedMailPassword = $mailPassword -replace '\s', ''
+    if ($mailUsername -match '(?i)@gmail\.com$' -and $normalizedMailPassword.Length -ne 16) {
+        Write-Warning 'For Gmail, MAIL_PASSWORD must be a 16-character Google App Password, not the regular account password.'
+    }
+    $mailDeadline = (Get-Date).AddSeconds(45)
+    do {
+        Start-Sleep -Milliseconds 500
+        $mailReady = Get-NetTCPConnection -State Listen -LocalPort 8771 -ErrorAction SilentlyContinue
+    } while (-not $mailReady -and (Get-Date) -lt $mailDeadline)
+    if ($mailReady) {
+        try {
+            $smtpHealth = Invoke-RestMethod -Uri 'http://localhost:8771/api/v1/email/health' -TimeoutSec 15
+            if (-not $smtpHealth.result) { throw 'SMTP is unavailable' }
+            Write-Host 'SMTP authentication: ready'
+        } catch {
+            Write-Warning 'Email service started, but SMTP authentication failed. Check MAIL_USERNAME and the provider app password.'
+        }
+    } else {
+        Write-Warning "Email sender failed to start. Check $logs\email-sender.out.log"
     }
 }
 
@@ -84,6 +123,9 @@ Write-Host 'Services are starting:'
 Write-Host '  Authorization: http://localhost:5555'
 Write-Host '  Registration:  http://localhost:8080/register'
 Write-Host '  Login:         http://localhost:8080/login'
+if ($mailUsername -and $mailPassword) {
+    Write-Host '  Email sender:  http://localhost:8771'
+}
 if ($llmProvider -match '(?i)lm\s*studio') {
     Write-Host '  Local LLM API: http://localhost:1234'
 }

@@ -1,6 +1,6 @@
 param(
     [string]$SearchRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$AuthProject = (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'social-network-authorization')
+    [string]$AuthProject = (Join-Path (Split-Path -Parent $PSScriptRoot) 'authorization')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,6 +34,12 @@ $env:AUTH_DB_USERNAME = $settings['DB_USERNAME']
 $env:AUTH_DB_PASSWORD = $settings['DB_PASSWORD']
 $env:AUTH_JWT_SECRET = [Convert]::ToBase64String($jwtBytes)
 $env:AUTH_SERVER_PORT = '5555'
+if ($settings['REGISTRATION_DEFAULT_ROLE']) {
+    $env:REGISTRATION_DEFAULT_ROLE = $settings['REGISTRATION_DEFAULT_ROLE']
+}
+if ($settings['BOOTSTRAP_ADMIN_EMAILS']) {
+    $env:BOOTSTRAP_ADMIN_EMAILS = $settings['BOOTSTRAP_ADMIN_EMAILS']
+}
 
 if (-not $env:JAVA_HOME) {
     $ideaJava = 'C:\Program Files\JetBrains\IntelliJ IDEA Community Edition 2025.2.5\jbr'
@@ -43,5 +49,10 @@ if (-not $env:JAVA_HOME) {
 }
 
 Set-Location -LiteralPath $AuthProject
-& '.\mvnw.cmd' -q spring-boot:run '-Dspring-boot.run.profiles=search'
+$maven = 'C:\Program Files\JetBrains\IntelliJ IDEA Community Edition 2025.2.5\plugins\maven\lib\maven3\bin\mvn.cmd'
+if (Test-Path -LiteralPath $maven) {
+    & $maven -q spring-boot:run '-Dspring-boot.run.profiles=search'
+} else {
+    & 'mvn' -q spring-boot:run '-Dspring-boot.run.profiles=search'
+}
 exit $LASTEXITCODE

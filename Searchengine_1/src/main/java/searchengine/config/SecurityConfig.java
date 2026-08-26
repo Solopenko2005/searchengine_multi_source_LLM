@@ -50,14 +50,15 @@ public final class SecurityConfig {
 
     private static void authorize(HttpSecurity http) throws Exception {
         http.authorizeRequests(authorize -> authorize
-                .antMatchers("/login", "/register", "/assets/**", "/error").permitAll()
-                .antMatchers(HttpMethod.GET, "/", "/api/statistics", "/api/search",
+                .antMatchers("/", "/privacy", "/login", "/register", "/forgot-password", "/password-reset", "/admin-verification",
+                        "/assets/**", "/error").permitAll()
+                .antMatchers(HttpMethod.GET, "/app", "/api/statistics", "/api/search",
                         "/api/assistant/**", "/api/documents/**", "/documents/**",
-                        "/api/indexing/status", "/api/indexing/jobs").authenticated()
-                .antMatchers(HttpMethod.POST, "/api/assistant/chat").authenticated()
-                .antMatchers(HttpMethod.POST, "/api/uploadDocument").authenticated()
-                .antMatchers(HttpMethod.POST, "/api/documents/indexing/stop").authenticated()
-                .antMatchers(HttpMethod.POST, "/api/indexing/jobs/*/stop", "/api/indexing/jobs/stop-all").authenticated()
+                        "/api/me", "/api/sources", "/api/groups", "/api/groups/invitations/**",
+                        "/api/topics/**", "/api/simple/**", "/api/indexing/status",
+                        "/api/indexing/jobs").authenticated()
+                .antMatchers(HttpMethod.POST, "/api/assistant/chat", "/api/assistant/export").authenticated()
+                .antMatchers(HttpMethod.POST, "/api/groups/invitations/*/accept").authenticated()
                 .antMatchers(HttpMethod.PUT, "/api/assistant/profile").authenticated()
                 .antMatchers("/api/**").hasRole("ADMIN")
                 .anyRequest().authenticated());
@@ -80,9 +81,18 @@ public final class SecurityConfig {
                     .formLogin(form -> form
                             .loginPage("/login")
                             .loginProcessingUrl("/login")
-                            .defaultSuccessUrl("/", true)
+                            .defaultSuccessUrl("/app", true)
                             .failureUrl("/login?error")
                             .permitAll())
+                    .logout(logout -> logout
+                            .logoutUrl("/logout")
+                            .logoutSuccessUrl("/login?logout")
+                            .invalidateHttpSession(true)
+                            .clearAuthentication(true)
+                            .deleteCookies("JSESSIONID", "XSRF-TOKEN"))
+                    .sessionManagement(session -> session
+                            .sessionFixation().newSession()
+                            .maximumSessions(1))
                     .httpBasic();
             http.addFilterAfter(assistantRateLimitFilter, AnonymousAuthenticationFilter.class);
             return http.build();

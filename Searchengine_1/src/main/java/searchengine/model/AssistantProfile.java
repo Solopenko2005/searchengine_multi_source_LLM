@@ -36,6 +36,14 @@ public class AssistantProfile {
     @Column(name = "document_ids", nullable = false, columnDefinition = "TEXT")
     private String documentIds = "";
 
+    /** Comma-separated source (site) identifiers selected for the RAG workspace. */
+    @Column(name = "source_ids", nullable = false, columnDefinition = "TEXT")
+    private String sourceIds = "";
+
+    /** Main themes produced by the Assistant topic analysis, one title per line. */
+    @Column(name = "detected_topics", nullable = false, columnDefinition = "TEXT")
+    private String detectedTopics = "";
+
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 

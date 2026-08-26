@@ -28,7 +28,7 @@
     <link rel="stylesheet" href="/assets/css/fonts.css?v=82368483">
     <link rel="stylesheet" href="/assets/css/basic.css?v=82368483">
     <link rel="stylesheet" href="/assets/css/extra.css?v=82368483">
-    <link rel="stylesheet" href="/assets/css/indexing-jobs.css?v=20260807-2"><!--[if lt IE 9]>
+    <link rel="stylesheet" href="/assets/css/indexing-jobs.css?v=20260826-2"><!--[if lt IE 9]>
     <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script><![endif]-->
 
     <script>
@@ -36,7 +36,9 @@
     </script>
 
     <script defer src="/assets/js/scripts.js?v=20260805-csrf-fix"></script>
-    <script defer src="/assets/js/indexing-jobs.js?v=20260807-2"></script>
+    <script defer src="/assets/js/indexing-jobs.js?v=20260811-2"></script>
+    <script defer src="/assets/js/i18n.js?v=20260811-2"></script>
+    <script defer src="/assets/js/workspace.js?v=20260826-2"></script>
 
 </head>
 <body class="Site">
@@ -66,10 +68,19 @@ p.error-browser
         <div class="Site-loadingIsComplete">
             <main class="Tabs Tabs_column Middle-main">
                 <div class="Column">
-                    <div class="Tabs-links"><a class="Tabs-link Tabs-link_ACTIVE" href="#dashboard"><img class="Tabs-icon" src="/assets/img/icons/dashboard.svg" alt="dashboard.svg"/><span class="Tabs-linkText">Статистика</span></a><a class="Tabs-link" href="#management"><img class="Tabs-icon" src="/assets/img/icons/management.svg" alt="management.svg"/><span class="Tabs-linkText">Управление</span></a><a class="Tabs-link" href="#search"><img class="Tabs-icon" src="/assets/img/icons/search.svg" alt="search.svg"/><span class="Tabs-linkText">Поиск</span></a><a class="Tabs-link" href="#assistant"><img class="Tabs-icon" src="/assets/img/icons/assistant.svg" alt="assistant.svg"/><span class="Tabs-linkText">Ассистент</span></a>
+                    <div class="Tabs-links"><a class="Tabs-link Tabs-link_ACTIVE" href="#dashboard"><img class="Tabs-icon" src="/assets/img/icons/dashboard.svg" alt=""/><span class="Tabs-linkText" data-i18n="nav.statistics">Статистика</span></a><a class="Tabs-link AdminOnly" href="#management"><img class="Tabs-icon" src="/assets/img/icons/management.svg" alt=""/><span class="Tabs-linkText" data-i18n="nav.management">Управление</span></a><a class="Tabs-link AdminOnly" href="#library"><img class="Tabs-icon" src="/assets/img/icons/library.svg" alt=""/><span class="Tabs-linkText" data-i18n="nav.library">Библиотека</span></a><a class="Tabs-link" href="#search"><img class="Tabs-icon" src="/assets/img/icons/search.svg" alt=""/><span class="Tabs-linkText" data-i18n="nav.search">Поиск</span></a><a class="Tabs-link" href="#assistant"><img class="Tabs-icon" src="/assets/img/icons/assistant.svg" alt=""/><span class="Tabs-linkText" data-i18n="nav.assistant">Ассистент</span></a>
                     </div>
                 </div>
                 <div class="Tabs-wrap">
+                    <header class="AppToolbar">
+                        <div class="AppToolbar-brand"><span class="AppToolbar-mark">S</span><span data-i18n="app.name">Научный поиск</span></div>
+                        <div class="AppToolbar-actions">
+                            <div class="LanguageSwitch" aria-label="Language"><button type="button" data-language="ru">RU</button><button type="button" data-language="en">EN</button></div>
+                            <button class="ProfileTrigger" id="profileTrigger" type="button" aria-controls="profileDrawer" aria-expanded="false">
+                                <span class="UserCard-avatar" id="userInitials">…</span><span><strong id="userDisplayName">Профиль</strong><small id="userRole">Пользователь</small></span>
+                            </button>
+                        </div>
+                    </header>
                     <div class="Tabs-block" id="dashboard">
                         <div class="Section">
                             <div class="Section-header">
@@ -106,16 +117,17 @@ p.error-browser
                                 <h2 class="Section-title">Управление
                                 </h2>
                             </div>
-                            <div>
-                                <button class="btn btn_primary API-startIndexing" data-btntype="check" data-check="false" data-alttext="Остановить" data-send="startIndexing" data-altsend="stopIndexing"><span class="btn-content">Начать индексацию</span>
+                            <div class="ManagementIndexStart">
+                                <button class="btn btn_primary API-startIndexing" data-btntype="check" data-check="false" data-alttext="Остановить" data-send="startIndexing" data-altsend="stopIndexing"><span class="btn-content">Проиндексировать базовые сайты</span>
                                 </button>
                                 <span class="IndexStatus IndexStatus_pending" id="indexingStatusBadge">Статус индекса проверяется…</span>
-                            </div><br>
+                                <details class="IndexingHelp"><summary>Что делает эта кнопка?</summary><p>Она запускает повторный обход сайтов из базового списка приложения. Сайты, документы и таблицы, которые вы добавляете ниже, начинают обрабатываться автоматически — нажимать эту кнопку для них не нужно.</p></details>
+                            </div>
                             <div class="UpdatePageBlock">
                                 <h3>Добавить новый сайт-источник:
                                 </h3>
                                 <form class="form form_close" action="#" method="post" data-send="addSite">
-                                    <div class="form-group form-group_row">
+                                    <div class="form-group form-group_row ManagementForm-row">
                                         <input class="form-input" id="siteUrl" name="url" type="text" placeholder="https://example.com"/>
                                         <input class="form-input" id="siteName" name="name" type="text" placeholder="Название источника (необязательно)"/>
                                         <button class="btn btn_primary form-btn" type="submit">Добавить сайт
@@ -127,8 +139,8 @@ p.error-browser
                                 <h3>Добавить/обновить отдельную страницу уже добавленного источника:
                                 </h3>
                                 <form class="form form_close" action="#" method="post" data-send="indexPage">
-                                    <div class="form-group form-group_row">
-                                        <input class="form-input" id="page" name="page" type="text"/>
+                                    <div class="form-group form-group_row ManagementForm-row ManagementForm-row_short">
+                                        <input class="form-input" id="page" name="page" type="text" placeholder="https://example.com/article"/>
                                         <button class="btn btn_primary form-btn" type="submit">Добавить/обновить
                                         </button>
                                     </div>
@@ -138,14 +150,32 @@ p.error-browser
                                 <h3>Загрузить документы (DOCX или PDF) как источники:
                                 </h3>
                                 <form class="form form_close" id="documentUploadForm" action="api/uploadDocument" method="post" enctype="multipart/form-data">
-                                    <div class="form-group form-group_row">
-                                        <input class="form-input" id="documentFile" name="files" type="file" accept=".docx,.pdf" multiple/>
+                                    <div class="form-group form-group_row ManagementForm-row">
+                                        <input class="FilePicker-input" id="documentFile" name="files" type="file" accept=".docx,.pdf" multiple/>
+                                        <label class="FilePicker" for="documentFile"><span class="FilePicker-icon" aria-hidden="true">⇧</span><span><strong>Выбрать документы</strong><small id="documentFileLabel">Файлы не выбраны</small></span></label>
                                         <button class="btn btn_primary form-btn" type="submit">Загрузить и проиндексировать
                                         </button>
                                     </div>
-                                    <div class="form-hint">Можно выбрать сразу несколько файлов</div>
+                                    <div class="form-hint">Можно выбрать сразу несколько файлов размером до 200 МБ каждый</div>
                                 </form>
                             </div>
+                            <div class="UpdatePageBlock SourceImport">
+                                <h3>Импортировать список источников из CSV или XLSX:</h3>
+                                <form class="form form_close" id="sourceImportForm" enctype="multipart/form-data">
+                                    <div class="form-group form-group_row ManagementForm-row">
+                                        <input class="FilePicker-input" id="sourceListFile" name="file" type="file" accept=".csv,.xlsx"/>
+                                        <label class="FilePicker" for="sourceListFile"><span class="FilePicker-icon" aria-hidden="true">⇧</span><span><strong>Выбрать таблицу</strong><small id="sourceListFileLabel">Файл не выбран</small></span></label>
+                                        <button class="btn btn_primary form-btn" type="submit">Импортировать список</button>
+                                    </div>
+                                    <div class="form-hint">Столбцы: URL/Ссылка, Название и Тип. Тип «site» запускает обход сайта, «page» добавляет только одну страницу.</div>
+                                    <div class="SourceImport-result" id="sourceImportResult" aria-live="polite"></div>
+                                </form>
+                            </div>
+                            <section class="GroupPanel" id="groupPanel">
+                                <header><div><h3 data-i18n="groups.title">Группы доступа</h3><p data-i18n="groups.lead">Подключайте посетителей к общей базе источников администратора.</p></div><button class="GroupPanel-add" id="groupCreateToggle" type="button" aria-expanded="false" aria-controls="groupCreateForm" title="Добавить группу">+</button></header>
+                                <form class="GroupPanel-create" id="groupCreateForm" hidden><input class="form-input" id="groupName" placeholder="Название новой группы" maxlength="120" required><button class="btn btn_primary" type="submit">Создать группу</button></form>
+                                <div class="GroupPanel-list" id="groupList">Загрузка групп…</div>
+                            </section>
                             <section class="IndexingQueue" id="indexingQueue" aria-labelledby="indexingQueueTitle">
                                 <header class="IndexingQueue-header">
                                     <div>
@@ -182,6 +212,34 @@ p.error-browser
                             </section>
                         </div>
                     </div>
+                    <div class="Tabs-block AdminOnly" id="library">
+                        <div class="Section">
+                            <div class="Section-header"><h2 class="Section-title" data-i18n="library.title">Научная библиотека</h2></div>
+                            <p class="Library-intro" data-i18n="library.lead">Поиск публикаций вынесен в отдельное рабочее пространство: здесь можно подобрать статьи, проверить аннотацию и добавить материал в общую базу.</p>
+                            <section class="ScientificCatalog" id="scientificCatalog">
+                                <div class="ScientificCatalog-head"><div><h3 data-i18n="library.catalog">Каталог научных публикаций</h3><p>Ищите статьи через открытые научные API или переходите в проверенные российские каталоги.</p></div></div>
+                                <section class="ScientificRecommendations" aria-labelledby="scientificRecommendationsTitle">
+                                    <div class="ScientificRecommendations-head">
+                                        <div><h3 id="scientificRecommendationsTitle" data-i18n="library.recommendations">Рекомендации по вашим документам</h3><p data-i18n="library.recommendations.lead">Система определяет основную тему загруженных документов и предлагает близкие научные публикации.</p></div>
+                                        <span class="ScientificRecommendations-topic" id="scientificRecommendationTopic"></span>
+                                    </div>
+                                    <div class="ScientificCatalog-status" id="scientificRecommendationStatus">Подбираем публикации…</div>
+                                    <div class="ScientificCatalog-results" id="scientificRecommendations"></div>
+                                </section>
+                                <form class="ScientificCatalog-form" id="scientificSearchForm">
+                                    <select class="form-select" id="scientificProvider" aria-label="Научный каталог"></select>
+                                    <select class="form-select" id="scientificCategory" aria-label="Тематика"></select>
+                                    <select class="form-select" id="scientificTopicSuggestion" aria-label="Основная тема из Ассистента">
+                                        <option value="">Тема из Ассистента</option>
+                                    </select>
+                                    <input class="form-input" id="scientificQuery" type="search" placeholder="Например: селекция засухоустойчивой пшеницы" required/>
+                                    <button class="btn btn_primary" type="submit" data-i18n="library.find">Найти статьи</button>
+                                </form>
+                                <div class="ScientificCatalog-status" id="scientificStatus"></div><div class="ScientificCatalog-results" id="scientificResults"></div>
+                                <section class="RussianCatalogs"><div class="RussianCatalogs-head"><h3>Российские научные ресурсы</h3><p>Подборка каталогов, репозиториев и библиотек для самостоятельного поиска.</p></div><div class="RussianCatalogs-grid" id="russianCatalogs"></div></section>
+                            </section>
+                        </div>
+                    </div>
                     <div class="Tabs-block" id="search">
                         <div class="Section">
                             <div class="Section-header">
@@ -199,18 +257,18 @@ p.error-browser
                                     </div>
                                 </div>
                                 <div class="form-group form-group_row">
-                                    <input class="form-input" id="query" name="query" type="text" placeholder="Query"/>
-                                    <button class="btn btn_primary form-btn" type="submit">Search
+                                    <input class="form-input" id="query" name="query" type="text" placeholder="Введите поисковый запрос"/>
+                                    <button class="btn btn_primary form-btn" type="submit">Найти
                                     </button>
                                 </div>
                             </form>
                             <div class="SearchResult">
-                                <strong class="SearchResult-title">Found&#32;<span class="SearchResult-amount">0</span>&#32;results
+                                <strong class="SearchResult-title">Найдено&#32;<span class="SearchResult-amount">0</span>&#32;результатов
                                 </strong>
                                 <div class="SearchResult-content">
                                 </div>
                                 <div class="SearchResult-footer SearchResult-footer_hide">
-                                    <button class="btn btn_primary" data-send="search" data-sendtype="next">Show more<span class="SearchResult-remain">(0)</span>
+                                    <button class="btn btn_primary" data-send="search" data-sendtype="next">Показать ещё<span class="SearchResult-remain">(0)</span>
                                     </button>
                                 </div>
                             </div>
@@ -221,16 +279,16 @@ p.error-browser
                             <div class="Section-header">
                                 <h2 class="Section-title">LLM-ассистент</h2>
                             </div>
-                            <p class="Assistant-intro">Задайте вопрос по вашим документам — ассистент найдёт релевантные материалы и даст содержательный ответ со ссылками на литературу.</p>
+                            <p class="Assistant-intro">Задайте вопрос по всем вашим источникам — сайтам, научным статьям и файлам. Ассистент найдёт релевантные материалы и даст ответ со ссылками.</p>
                             <div class="Assistant-status" id="assistantStatus"></div>
 
                             <details class="Assistant-profile" open>
-                                <summary>Настройка ассистента под мои документы</summary>
+                                <summary>Настройка ассистента под мои источники</summary>
                                 <label for="assistantProfile">Роль и область внимания</label>
-                                <textarea id="assistantProfile" rows="3" placeholder="Например: анализируй документы как агроном; обращай особое внимание на технологии селекции и практические ограничения"></textarea>
+                                <textarea id="assistantProfile" rows="3" placeholder="Например: анализируй источники как агроном; обращай особое внимание на технологии селекции и практические ограничения"></textarea>
                                 <div class="Assistant-documentScope">
-                                    <strong>Документы в текущей рабочей области</strong>
-                                    <div id="assistantDocuments">Загрузка списка документов…</div>
+                                    <div class="Assistant-scopeHead"><strong>Источники в текущей рабочей области</strong><span><button type="button" id="assistantSelectAll">Выбрать все</button><button type="button" id="assistantClearAll">Снять выбор</button></span></div>
+                                    <div id="assistantDocuments">Загрузка списка источников…</div>
                                 </div>
                                 <button class="btn btn_primary" type="button" id="assistantProfileSave">Сохранить профиль</button>
                                 <span id="assistantProfileState"></span>
@@ -238,7 +296,7 @@ p.error-browser
 
                             <div class="Assistant-topics">
                                 <div class="Assistant-topics-head">
-                                    <h3>Популярные тематики в документах</h3>
+                                    <h3>Популярные тематики в источниках</h3>
                                     <button class="btn btn_primary" type="button" id="assistantTopicsBtn">Проанализировать</button>
                                 </div>
                                 <div class="Assistant-topics-body" id="assistantTopicsBody"></div>
@@ -247,17 +305,30 @@ p.error-browser
                             <div class="Assistant-chat">
                                 <div class="Assistant-messages" id="assistantMessages">
                                     <div class="Assistant-msg Assistant-msg_bot">
-                                        <div class="Assistant-msg-text">Здравствуйте! Я ассистент поисковой системы на технологиях LLM. Спросите меня о содержании ваших документов, ключевых темах или конкретных фактах — я отвечу и приведу источники.</div>
+                                        <div class="Assistant-msg-text">Здравствуйте! Спросите меня о содержании сайтов, научных статей или файлов — я отвечу и приведу использованные источники.</div>
                                     </div>
                                 </div>
                                 <form class="Assistant-form" id="assistantForm" action="#" method="post">
-                                    <textarea class="Assistant-input" id="assistantInput" rows="2" placeholder="Введите вопрос по вашим документам..."></textarea>
+                                    <textarea class="Assistant-input" id="assistantInput" rows="2" placeholder="Введите вопрос по вашим источникам..."></textarea>
                                     <button class="btn btn_primary Assistant-send" type="submit" id="assistantSend">Отправить</button>
                                 </form>
+                                <div class="Assistant-export" id="assistantExport" hidden>
+                                    <span>Скачать последний ответ:</span>
+                                    <button type="button" data-assistant-export="docx">DOCX</button>
+                                    <button type="button" data-assistant-export="txt">TXT</button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
+                <div class="ProfileOverlay" id="profileOverlay" hidden></div>
+                <aside class="ProfileDrawer" id="profileDrawer" aria-hidden="true" aria-labelledby="profileDrawerTitle">
+                    <header class="ProfileDrawer-header"><div><span class="UserCard-avatar" id="drawerInitials">…</span><div><h2 id="profileDrawerTitle">Профиль</h2><span id="userLogin">Загрузка…</span></div></div><button type="button" id="profileClose" aria-label="Закрыть">×</button></header>
+                    <div class="ProfileDrawer-summary"><span><strong id="userSources">0</strong> источников</span><span><strong id="userPages">0</strong> страниц</span><span><strong id="userGroups">0</strong> групп</span></div>
+                    <section class="MySources"><header><h3 data-i18n="sources.mine">Мои источники</h3><div class="MySources-tools AdminOnly"><button type="button" id="sourcesSelectAll">Выбрать все</button><button type="button" id="sourcesDeleteSelected" disabled>Удалить</button></div></header><div id="mySourcesList" class="MySources-list">Загрузка…</div></section>
+                    <section class="ProfileGroups"><h3>Мои группы</h3><div id="profileGroupsList">Нет подключённых групп</div></section>
+                    <form class="ProfileDrawer-logout" action="/logout" method="post"><input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"><button type="submit" data-i18n="profile.logout">Выйти из аккаунта</button></form>
+                </aside>
             </main>
         </div>
     </div>
@@ -314,6 +385,7 @@ p.error-browser
 <script>
 (function () {
     var API = (window.backendApiUrl || 'api');
+    function tr(ru, en) { return window.AppI18n ? window.AppI18n.t(ru, en) : ru; }
     var messagesEl = document.getElementById('assistantMessages');
     var formEl = document.getElementById('assistantForm');
     var inputEl = document.getElementById('assistantInput');
@@ -328,7 +400,9 @@ p.error-browser
     var stopDocumentIndexingEl = document.getElementById('stopDocumentIndexing');
     var profileSaveEl = document.getElementById('assistantProfileSave');
     var profileStateEl = document.getElementById('assistantProfileState');
+    var exportEl = document.getElementById('assistantExport');
     var history = [];
+    var lastExport = null;
 
     if (!formEl) { return; }
 
@@ -355,27 +429,29 @@ p.error-browser
         return headers;
     }
 
-    function selectedDocumentIds() {
+    function selectedSourceIds() {
         return Array.prototype.slice.call(documentsEl.querySelectorAll('input[type=checkbox]:checked'))
             .map(function (checkbox) { return Number(checkbox.value); });
     }
 
     function saveProfile() {
-        profileStateEl.textContent = 'Сохранение…';
+        profileStateEl.textContent = tr('Сохранение…', 'Saving…');
         return fetch(API + '/assistant/profile', {
             method: 'PUT',
             headers: jsonHeaders(),
             body: JSON.stringify({
                 instructions: profileEl.value,
-                documentIds: selectedDocumentIds()
+                sourceIds: selectedSourceIds()
             })
         }).then(function (r) {
-            if (!r.ok) { throw new Error('HTTP ' + r.status); }
-            return r.json();
+            return r.json().catch(function () { return {}; }).then(function (body) {
+                if (!r.ok || body.result === false) throw new Error(body.error || ('HTTP ' + r.status));
+                return body;
+            });
         }).then(function () {
-            profileStateEl.textContent = 'Профиль сохранён';
+            profileStateEl.textContent = tr('Профиль сохранён', 'Profile saved');
         }).catch(function (e) {
-            profileStateEl.textContent = 'Ошибка сохранения: ' + e.message;
+            profileStateEl.textContent = tr('Ошибка сохранения: ', 'Save error: ') + e.message;
             throw e;
         });
     }
@@ -394,14 +470,14 @@ p.error-browser
     function badge(usedLlm) {
         return usedLlm
             ? '<span class="Assistant-badge Assistant-badge_llm">LLM</span>'
-            : '<span class="Assistant-badge Assistant-badge_local">локальный режим</span>';
+            : '<span class="Assistant-badge Assistant-badge_local">' + tr('локальный режим', 'local mode') + '</span>';
     }
 
     function sourcesHtml(sources) {
         if (!sources || !sources.length) { return ''; }
-        var html = '<div class="Assistant-sources"><div class="Assistant-sources-title">Источники (литература):</div><ol>';
+        var html = '<div class="Assistant-sources"><div class="Assistant-sources-title">' + tr('Источники (литература):', 'Sources (references):') + '</div><ol>';
         sources.forEach(function (s) {
-            var label = esc(s.title || ('Источник ' + s.index));
+            var label = esc(s.title || (tr('Источник ', 'Source ') + s.index));
             if (s.source) { label += ' — ' + esc(s.source); }
             var link = s.url
                 ? '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + label + '</a>'
@@ -426,7 +502,7 @@ p.error-browser
         var div = document.createElement('div');
         div.className = 'Assistant-msg Assistant-msg_bot';
         div.id = 'assistantTyping';
-        div.innerHTML = '<div class="Assistant-msg-text Assistant-typing">Ассистент печатает...</div>';
+        div.innerHTML = '<div class="Assistant-msg-text Assistant-typing">' + tr('Ассистент печатает...', 'Assistant is typing...') + '</div>';
         messagesEl.appendChild(div);
         scrollDown();
     }
@@ -449,22 +525,24 @@ p.error-browser
                 message: text,
                 history: history.slice(0, -1),
                 profileInstructions: profileEl.value,
-                documentIds: selectedDocumentIds()
+                sourceIds: selectedSourceIds()
             })
         })
         .then(function (r) { return r.json(); })
         .then(function (data) {
             removeTyping();
             if (data && data.result) {
-                addBotMessage(data.answer || '(пустой ответ)', data.sources, data.usedLlm);
+                addBotMessage(data.answer || tr('(пустой ответ)', '(empty response)'), data.sources, data.usedLlm);
                 history.push({ role: 'assistant', content: data.answer || '' });
+                lastExport = { question: text, answer: data.answer || '', sources: data.sources || [] };
+                exportEl.hidden = false;
             } else {
-                addBotMessage('Ошибка: ' + (data && data.error ? data.error : 'неизвестная ошибка'), [], false);
+                addBotMessage(tr('Ошибка: ', 'Error: ') + (data && data.error ? data.error : tr('неизвестная ошибка', 'unknown error')), [], false);
             }
         })
         .catch(function (e) {
             removeTyping();
-            addBotMessage('Не удалось связаться с сервером: ' + e.message, [], false);
+            addBotMessage(tr('Не удалось связаться с сервером: ', 'Could not connect to the server: ') + e.message, [], false);
         })
         .finally(function () {
             sendBtn.disabled = false;
@@ -491,46 +569,109 @@ p.error-browser
         .then(function (data) {
             if (data && data.llmConfigured) {
                 var provider = data.provider || 'LLM';
-                statusEl.textContent = provider + ' подключён: ' + (data.model || 'модель не указана') + '. Ответы строятся по выбранным документам.';
+                statusEl.textContent = provider + tr(' подключён: ', ' connected: ') + (data.model || tr('модель не указана', 'model not specified')) + tr('. Ответы строятся по всем выбранным источникам.', '. Answers use all selected sources.');
             } else {
                 statusEl.className = 'Assistant-status Assistant-status_warn';
-                statusEl.textContent = 'LLM не подключена: ассистент работает в резервном режиме. Проверьте настройки модели и API для развёрнутых ответов и LLM-анализа тематик.';
+                statusEl.textContent = tr('LLM не подключена: ассистент работает в резервном режиме. Проверьте настройки модели и API для развёрнутых ответов и LLM-анализа тематик.', 'LLM is not connected: the assistant is using fallback mode. Check the model and API settings for detailed answers and LLM topic analysis.');
             }
         })
         .catch(function () {
             statusEl.style.display = 'none';
         });
 
-    fetch(API + '/documents')
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-            if (!data || !data.data || !data.data.length) {
-                documentsEl.textContent = 'Загруженных документов пока нет.';
+    function renderAssistantSources(sources) {
+            if (!sources || !sources.length) {
+                documentsEl.textContent = tr('Проиндексированных источников пока нет.', 'There are no indexed sources yet.');
                 return;
             }
-            documentsEl.innerHTML = data.data.map(function (doc) {
-                return '<label><input type="checkbox" value="' + Number(doc.id) + '" checked> ' +
-                    esc(doc.name) + '</label>';
+            documentsEl.innerHTML = sources.map(function (source) {
+                var type = source.type === 'DOCUMENT' ? tr('Файл', 'File') :
+                    (source.type === 'SCIENTIFIC_ARTICLE' ? tr('Статья', 'Article') : tr('Сайт', 'Website'));
+                return '<label><input type="checkbox" value="' + Number(source.id) + '" checked> ' +
+                    '<span><strong>' + esc(source.name) + '</strong><small>' + type + ' · ' +
+                    Number(source.readyPages || 0) + '/' + Number(source.pages || 0) + ' ' + tr('стр.', 'pages') + '</small></span></label>';
             }).join('');
+    }
+
+    function waitForWorkspaceSources() {
+        if (Array.isArray(window.workspaceSources)) return Promise.resolve(window.workspaceSources);
+        return new Promise(function (resolve) {
+            var settled = false;
+            var timer = window.setTimeout(function () {
+                if (settled) return;
+                settled = true;
+                fetch(API + '/sources').then(function (r) { return r.json(); })
+                    .then(function (data) { resolve(data && data.data ? data.data : []); })
+                    .catch(function () { resolve([]); });
+            }, 2500);
+            window.addEventListener('workspace-sources-ready', function (event) {
+                if (settled) return;
+                settled = true;
+                window.clearTimeout(timer);
+                resolve(Array.isArray(event.detail) ? event.detail : []);
+            }, { once: true });
+        });
+    }
+
+    waitForWorkspaceSources()
+        .then(function (sources) {
+            renderAssistantSources(sources);
             return fetch(API + '/assistant/profile');
         })
         .then(function (r) { return r && r.json ? r.json() : null; })
         .then(function (profile) {
             if (!profile) { return; }
             profileEl.value = profile.instructions || '';
-            var selected = profile.documentIds || [];
+            var selected = profile.sourceIds || [];
             Array.prototype.forEach.call(documentsEl.querySelectorAll('input[type=checkbox]'), function (box) {
                 box.checked = selected.indexOf(Number(box.value)) >= 0;
             });
         })
-        .catch(function () { documentsEl.textContent = 'Не удалось получить список документов.'; });
+        .catch(function () { documentsEl.textContent = tr('Не удалось получить список источников.', 'Could not load the source list.'); });
+
+    if (exportEl) {
+        exportEl.addEventListener('click', function (event) {
+            var button = event.target.closest('[data-assistant-export]');
+            if (!button || !lastExport) return;
+            var format = button.getAttribute('data-assistant-export');
+            button.disabled = true;
+            fetch(API + '/assistant/export?format=' + encodeURIComponent(format), {
+                method: 'POST', headers: jsonHeaders(), body: JSON.stringify(lastExport)
+            }).then(function (response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.blob();
+            }).then(function (blob) {
+                var url = URL.createObjectURL(blob);
+                var link = document.createElement('a');
+                link.href = url; link.download = 'assistant-report.' + format;
+                document.body.appendChild(link); link.click(); link.remove();
+                window.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+            }).catch(function (error) {
+                profileStateEl.textContent = tr('Ошибка экспорта: ', 'Export error: ') + error.message;
+            }).finally(function () { button.disabled = false; });
+        });
+    }
 
     function refreshIndexingStatus() {
         fetch(API + '/indexing/status')
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (!data || !indexingBadgeEl) { return; }
-                indexingBadgeEl.textContent = data.message || 'Статус неизвестен';
+                var badgeMessage = data.message || tr('Статус неизвестен', 'Status unknown');
+                if (window.AppI18n && window.AppI18n.language() === 'en') {
+                    if (data.ready) {
+                        badgeMessage = 'Index is ready';
+                    } else if (data.inProgress) {
+                        badgeMessage = 'Indexing is in progress';
+                    } else if (data.failed) {
+                        badgeMessage = 'Some sources need attention';
+                    } else if (data.stopped) {
+                        badgeMessage = 'Indexing has been stopped';
+                    } else {
+                        badgeMessage = 'Indexing has not been started';
+                    }
+                }
+                indexingBadgeEl.textContent = badgeMessage;
                 indexingBadgeEl.className = 'IndexStatus ' + (data.ready
                     ? 'IndexStatus_ready'
                     : (data.inProgress ? 'IndexStatus_working' :
@@ -546,7 +687,7 @@ p.error-browser
             .then(function (data) {
                 if (!data || !documentIndexingEl) { return; }
                 var progress = data.total ? (' ' + (data.completed || 0) + '/' + data.total) : '';
-                documentIndexingEl.textContent = 'Документы: ' + (data.state || 'IDLE') + progress;
+                documentIndexingEl.textContent = tr('Документы: ', 'Documents: ') + (data.state || 'IDLE') + progress;
                 documentIndexingEl.className = 'IndexStatus ' + (data.inProgress
                     ? 'IndexStatus_working'
                     : (data.state === 'FAILED' || data.state === 'STOPPED'
@@ -568,14 +709,14 @@ p.error-browser
     // Популярные тематики
     topicsBtn.addEventListener('click', function () {
         topicsBtn.disabled = true;
-        topicsBody.innerHTML = '<p class="Assistant-typing">Анализирую документы...</p>';
+        topicsBody.innerHTML = '<p class="Assistant-typing">' + tr('Анализирую источники...', 'Analyzing sources...') + '</p>';
         saveProfile().catch(function () {}).then(function () {
             return fetch(API + '/assistant/topics');
         })
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (!data || !data.result) {
-                    topicsBody.innerHTML = '<p>Ошибка: ' + esc(data && data.error ? data.error : 'не удалось получить темы') + '</p>';
+                    topicsBody.innerHTML = '<p>' + tr('Ошибка: ', 'Error: ') + esc(data && data.error ? data.error : tr('не удалось получить темы', 'could not load topics')) + '</p>';
                     return;
                 }
                 var html = '';
@@ -585,19 +726,19 @@ p.error-browser
                 if (data.topics && data.topics.length) {
                     html += '<ul class="Assistant-topics-list">';
                     data.topics.forEach(function (t) {
-                        var confidence = t.confidence ? (' · уверенность ' + Math.round(t.confidence * 100) + '%') : '';
+                        var confidence = t.confidence ? (tr(' · уверенность ', ' · confidence ') + Math.round(t.confidence * 100) + '%') : '';
                         html += '<li><span class="theme">' + t.rank + '. ' + esc(t.theme) + '</span>' +
-                            '<span class="meta">частота ' + t.frequency + ' · источников ' + t.mentions + confidence + '</span></li>';
+                            '<span class="meta">' + tr('частота ', 'frequency ') + t.frequency + tr(' · источников ', ' · sources ') + t.mentions + confidence + '</span></li>';
                         if (t.description) { html += '<li><span>' + esc(t.description) + '</span></li>'; }
                     });
                     html += '</ul>';
                 } else {
-                    html += '<p>Темы пока не выделены. Загрузите документы и запустите индексацию.</p>';
+                    html += '<p>' + tr('Темы пока не выделены. Добавьте источники и запустите индексацию.', 'No topics have been identified yet. Add sources and start indexing.') + '</p>';
                 }
                 topicsBody.innerHTML = html;
             })
             .catch(function (e) {
-                topicsBody.innerHTML = '<p>Не удалось связаться с сервером: ' + esc(e.message) + '</p>';
+                topicsBody.innerHTML = '<p>' + tr('Не удалось связаться с сервером: ', 'Could not connect to the server: ') + esc(e.message) + '</p>';
             })
             .finally(function () { topicsBtn.disabled = false; });
     });

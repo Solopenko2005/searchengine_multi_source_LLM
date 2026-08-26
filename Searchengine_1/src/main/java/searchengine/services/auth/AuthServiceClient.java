@@ -9,6 +9,7 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
+import java.util.Locale;
 import java.util.Set;
 
 @Service
@@ -34,8 +35,18 @@ public class AuthServiceClient {
             if (response == null || response.email() == null || response.roles() == null) {
                 throw new AuthServiceException("Сервис авторизации вернул неполный ответ");
             }
+            String requestedEmail = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
+            String authenticatedEmail = response.email().trim().toLowerCase(Locale.ROOT);
+            if (!requestedEmail.equals(authenticatedEmail)) {
+                throw new AuthServiceException(
+                        "Сервис авторизации вернул данные другого пользователя. Вход отменён из соображений безопасности");
+            }
             return new AuthenticatedUser(response.email(), response.roles());
         } catch (HttpStatusCodeException exception) {
+            if (exception.getStatusCode() == HttpStatus.FORBIDDEN) {
+                throw new AuthServiceException(
+                        "Подтвердите e-mail по ссылке из письма, чтобы активировать права администратора", exception);
+            }
             if (exception.getStatusCode() == HttpStatus.CONFLICT
                     || exception.getStatusCode() == HttpStatus.UNAUTHORIZED) {
                 throw new AuthServiceException("Неверный e-mail или пароль", exception);
@@ -50,7 +61,7 @@ public class AuthServiceClient {
         try {
             restTemplate.postForEntity("/api/v1/auth/register", new RegistrationRequest(
                     command.firstName(), command.lastName(), command.email(),
-                    command.password(), command.confirmPassword(), ""), Void.class);
+                    command.password(), command.confirmPassword(), "", command.role()), Void.class);
         } catch (HttpStatusCodeException exception) {
             if (exception.getStatusCode() == HttpStatus.CONFLICT) {
                 throw new AuthServiceException("Пользователь с таким e-mail уже зарегистрирован", exception);
@@ -61,8 +72,45 @@ public class AuthServiceClient {
         }
     }
 
+    public void verifyAdministrator(String token) {
+        try {
+            restTemplate.postForEntity("/api/v1/auth/admin/verify",
+                    new AdminVerificationRequest(token), Void.class);
+        } catch (HttpStatusCodeException exception) {
+            throw new AuthServiceException(
+                    "Ссылка подтверждения недействительна, уже использована или её срок истёк", exception);
+        } catch (ResourceAccessException exception) {
+            throw new AuthServiceException("Сервис подтверждения e-mail временно недоступен", exception);
+        }
+    }
+
+    public void requestPasswordRecovery(String email) {
+        try {
+            restTemplate.postForEntity("/api/v1/auth/password/recovery",
+                    new RecoveryRequest(email), Void.class);
+        } catch (HttpStatusCodeException exception) {
+            if (exception.getStatusCode() == HttpStatus.CONFLICT) {
+                throw new AuthServiceException("Пользователь с таким e-mail не найден", exception);
+            }
+            throw new AuthServiceException("Не удалось отправить письмо для восстановления", exception);
+        } catch (ResourceAccessException exception) {
+            throw new AuthServiceException("Сервис восстановления пароля недоступен", exception);
+        }
+    }
+
+    public void resetPassword(String token, String password, String confirmation) {
+        try {
+            restTemplate.postForEntity("/api/v1/auth/password/recovery/{token}",
+                    new PasswordResetRequest(password, confirmation), Void.class, token);
+        } catch (HttpStatusCodeException exception) {
+            throw new AuthServiceException("Ссылка недействительна или срок её действия истёк", exception);
+        } catch (ResourceAccessException exception) {
+            throw new AuthServiceException("Сервис восстановления пароля недоступен", exception);
+        }
+    }
+
     public record RegistrationCommand(String firstName, String lastName, String email,
-                                      String password, String confirmPassword) {
+                                      String password, String confirmPassword, String role) {
     }
 
     public record AuthenticatedUser(String email, Set<String> roles) {
@@ -72,7 +120,16 @@ public class AuthServiceClient {
     }
 
     private record RegistrationRequest(String firstName, String lastName, String email,
-                                       String password1, String password2, String captchaCode) {
+                                       String password1, String password2, String captchaCode, String role) {
+    }
+
+    private record AdminVerificationRequest(String token) {
+    }
+
+    private record RecoveryRequest(String email) {
+    }
+
+    private record PasswordResetRequest(String password, String confirmPassword) {
     }
 
     private record AuthResponse(String accessToken, String refreshToken, String email, Set<String> roles) {

@@ -11,4 +11,5 @@ public class AssistantProfileResponse {
     private boolean result;
     private String instructions;
     private List<Integer> documentIds;
+    private List<Integer> sourceIds;
 }

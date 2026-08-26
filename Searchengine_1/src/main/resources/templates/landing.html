@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Научный поиск: локальная LLM-система для точного и безопасного поиска по академическим материалам.">
+    <meta name="theme-color" content="#FDFDF5">
+    <title>Научный поиск | Локальная поисковая система</title>
+    <link rel="stylesheet" href="/assets/css/fonts.css">
+    <link rel="stylesheet" href="/assets/css/landing.css?v=20260826-4">
+    <script defer src="/assets/js/landing.js?v=20260826-2"></script>
+</head>
+<body>
+<a class="SkipLink" href="#main">Перейти к содержанию</a>
+
+<header class="LandingHeader">
+    <a class="LandingBrand" href="/" aria-label="Научный поиск, главная страница">
+        <span class="LandingBrand-mark" aria-hidden="true">НП</span>
+        <span>Научный поиск</span>
+    </a>
+    <button class="NavToggle" type="button" aria-expanded="false" aria-controls="landing-nav" data-nav-toggle>
+        <span></span><span></span><span></span>
+        <span class="VisuallyHidden">Открыть меню</span>
+    </button>
+    <nav class="LandingNav" id="landing-nav" aria-label="Навигация по странице" data-nav>
+        <a href="#about">О продукте</a>
+        <a href="#capabilities">Возможности</a>
+        <a href="#use-cases">Применение</a>
+        <a href="#project">О проекте</a>
+        <a href="#contacts">Контакты</a>
+    </nav>
+    <div class="LandingHeader-actions">
+        <a class="LandingLogin" href="/login">Войти</a>
+        <a class="LandingLogoFrame" href="/" aria-label="Научный поиск, главная страница">
+            <img class="LandingLogo" src="/assets/img/auth-logo.png" alt="Логотип проекта «Научный поиск»">
+        </a>
+    </div>
+</header>
+
+<main id="main">
+    <section class="Hero" aria-labelledby="hero-title">
+        <canvas class="InteractiveWaves" data-interactive-waves aria-hidden="true"></canvas>
+        <div class="Hero-copy">
+            <p class="Hero-kicker">Локальная LLM-система для академической среды</p>
+            <h1 id="hero-title">Научные знания<br>в одном безопасном поиске</h1>
+            <p class="Hero-lead">Находите точную информацию в научных статьях, учебных материалах, документах и внутренних базах без рекламы и информационного шума.</p>
+            <div class="Hero-actions">
+                <a class="Button Button_primary Button_magnetic" href="/login" data-magnetic-button><span>Запустить поиск</span><i class="Button-wave" aria-hidden="true"></i></a>
+                <a class="Button Button_secondary" href="#about">Узнать о продукте</a>
+            </div>
+            <p class="Hero-interactionHint"><span aria-hidden="true"></span> Подведите курсор к кнопке</p>
+            <dl class="Hero-facts" aria-label="Ключевые свойства системы">
+                <div><dt>Локально</dt><dd>данные остаются под вашим контролем</dd></div>
+                <div><dt>Точно</dt><dd>лемматизация и морфология русского языка</dd></div>
+                <div><dt>Гибко</dt><dd>сайты, PDF, DOCX и внутренние источники</dd></div>
+            </dl>
+        </div>
+
+        <aside class="SearchPreview" aria-label="Интерактивная демонстрация научного поиска" data-search-demo>
+            <div class="SearchPreview-top">
+                <div class="SearchPreview-heading"><small>Интерактивная демонстрация</small><strong>Как работает поиск</strong></div>
+                <span class="SearchPreview-state" data-demo-state>Подготовка</span>
+            </div>
+            <div class="SearchPreview-title">
+                <span class="SearchPreview-status"><i aria-hidden="true"></i> Локальная база готова</span>
+                <span class="SearchPreview-count">43 источника</span>
+            </div>
+            <div class="SearchPreview-field">
+                <span aria-hidden="true"></span>
+                <label class="VisuallyHidden" for="demo-query">Пример поискового запроса</label>
+                <input id="demo-query" type="text" value="" readonly data-demo-query>
+                <i class="TypingCaret" aria-hidden="true" data-demo-caret></i>
+                <button type="button" data-demo-submit>Найти</button>
+            </div>
+            <div class="SearchPreview-progress" data-demo-progress><span aria-hidden="true"></span><p>Ищем совпадения во всех доступных источниках</p></div>
+            <div class="SearchPreview-results" data-demo-results>
+                <article><span>Учебные материалы</span><h2>Основы обработки естественного языка</h2><p><mark>Морфологический анализ</mark> помогает определить начальную форму слова и повысить точность поиска.</p></article>
+                <article><span>Научная публикация</span><h2>Лемматизация русскоязычных текстов</h2><p>Система сопоставляет разные формы термина и показывает релевантные фрагменты источника.</p></article>
+            </div>
+            <div class="DemoCursor" aria-hidden="true" data-demo-cursor><span></span></div>
+        </aside>
+    </section>
+
+    <section class="Statement Section" id="about" aria-labelledby="about-title">
+        <div class="Section-label Reveal"><span>01</span> Задача продукта</div>
+        <div class="Statement-grid">
+            <h2 class="Section-title Reveal" id="about-title">От разрозненных материалов к единой системе знаний</h2>
+            <div class="Statement-copy Reveal">
+                <p>Научная информация хранится на сайтах, в файлах, электронных библиотеках и закрытых порталах. Пользователь тратит время не на исследование, а на повторный поиск и проверку источников.</p>
+                <p>«Научный поиск» объединяет выбранные материалы в локальной базе, понимает формы русских слов и помогает быстро перейти к точному фрагменту первоисточника.</p>
+            </div>
+        </div>
+        <div class="ContrastCards">
+            <article class="ContrastCard ContrastCard_problem Reveal">
+                <p class="Card-kicker">Сейчас</p><h3>Источники не связаны между собой</h3>
+                <ul><li>поиск приходится повторять на разных площадках;</li><li>результаты смешиваются с рекламой и информационным шумом;</li><li>внутренние документы сложно использовать совместно.</li></ul>
+            </article>
+            <article class="ContrastCard ContrastCard_solution Reveal">
+                <p class="Card-kicker">С системой</p><h3>Один запрос ко всей базе знаний</h3>
+                <ul><li>единый поиск по сайтам, PDF, DOCX и каталогам;</li><li>подсветка найденной леммы прямо в тексте;</li><li>локальный LLM-ассистент работает по доступным источникам.</li></ul>
+            </article>
+        </div>
+    </section>
+
+    <section class="Capabilities Section Section_tinted" id="capabilities" aria-labelledby="capabilities-title">
+        <div class="Section-heading">
+            <div><div class="Section-label Reveal"><span>02</span> Возможности</div><h2 class="Section-title Reveal" id="capabilities-title">Четыре инструмента в одной системе</h2></div>
+            <p class="Section-intro Reveal">Выберите направление, чтобы увидеть, как оно помогает работать с научной информацией.</p>
+        </div>
+        <div class="FeatureExplorer Reveal" data-feature-explorer>
+            <div class="FeatureTabs" role="tablist" aria-label="Возможности системы">
+                <button id="feature-tab-index" type="button" role="tab" aria-selected="true" aria-controls="feature-index" data-feature-tab="index"><span>01</span><strong>Индексация</strong><small>Собирает источники</small></button>
+                <button id="feature-tab-search" type="button" role="tab" aria-selected="false" aria-controls="feature-search" tabindex="-1" data-feature-tab="search"><span>02</span><strong>Поиск</strong><small>Находит точные фрагменты</small></button>
+                <button id="feature-tab-assistant" type="button" role="tab" aria-selected="false" aria-controls="feature-assistant" tabindex="-1" data-feature-tab="assistant"><span>03</span><strong>LLM-ассистент</strong><small>Обобщает материалы</small></button>
+                <button id="feature-tab-access" type="button" role="tab" aria-selected="false" aria-controls="feature-access" tabindex="-1" data-feature-tab="access"><span>04</span><strong>Доступ</strong><small>Разделяет роли</small></button>
+            </div>
+            <div class="FeaturePanels">
+                <article id="feature-index" role="tabpanel" aria-labelledby="feature-tab-index" data-feature-panel="index"><div><p class="Card-kicker">Контролируемый процесс</p><h3>Источники готовы к поиску еще во время индексации</h3><p>Сайты и документы обрабатываются параллельно. В панели видны очередь, прогресс, ошибки и уже доступные страницы. Задание можно остановить и продолжить.</p></div><ul><li>параллельная обработка;</li><li>прогресс каждого источника;</li><li>загрузка CSV и XLSX со списком ссылок.</li></ul></article>
+                <article id="feature-search" role="tabpanel" aria-labelledby="feature-tab-search" data-feature-panel="search" hidden><div><p class="Card-kicker">Русская морфология</p><h3>Поиск понимает слово, а не только точное написание</h3><p>Лемматизация связывает разные формы термина. В результате пользователь видит релевантный фрагмент и переходит к странице с выделенным совпадением.</p></div><ul><li>поиск по всем разрешенным источникам;</li><li>ранжирование по релевантности;</li><li>подсветка лемм в первоисточнике.</li></ul></article>
+                <article id="feature-assistant" role="tabpanel" aria-labelledby="feature-tab-assistant" data-feature-panel="assistant" hidden><div><p class="Card-kicker">Локальный контекст</p><h3>Ассистент отвечает на основе вашей базы знаний</h3><p>Модель получает репрезентативные фрагменты доступных источников, определяет основные темы и помогает подготовить структурированный ответ или файл.</p></div><ul><li>ответы по сайтам и документам;</li><li>выделение тематик;</li><li>экспорт результата в файл.</li></ul></article>
+                <article id="feature-access" role="tabpanel" aria-labelledby="feature-tab-access" data-feature-panel="access" hidden><div><p class="Card-kicker">Безопасная совместная работа</p><h3>Администратор управляет базой, посетитель работает с результатами</h3><p>Администратор формирует группу и подключает пользователей. Посетители получают статистику, поиск и ассистента, но не могут менять источники или индексацию.</p></div><ul><li>роли администратора и посетителя;</li><li>групповой доступ к общей базе;</li><li>защита с помощью Spring Security.</li></ul></article>
+            </div>
+        </div>
+    </section>
+
+    <section class="Workflow Section" aria-labelledby="workflow-title">
+        <div class="Section-label Reveal"><span>03</span> Принцип работы</div>
+        <h2 class="Section-title Reveal" id="workflow-title">От источника до проверяемого ответа</h2>
+        <ol class="Workflow-list">
+            <li class="Reveal"><span>1</span><div><h3>Добавьте материалы</h3><p>Укажите сайт, загрузите документы или импортируйте таблицу со списком источников.</p></div></li>
+            <li class="Reveal"><span>2</span><div><h3>Следите за обработкой</h3><p>Система очищает текст, выделяет леммы и сразу открывает готовые страницы для поиска.</p></div></li>
+            <li class="Reveal"><span>3</span><div><h3>Ищите по всей базе</h3><p>Один запрос возвращает точные сниппеты из всех источников, доступных вашей группе.</p></div></li>
+            <li class="Reveal"><span>4</span><div><h3>Работайте с результатом</h3><p>Откройте фрагмент в документе или попросите LLM-ассистента обобщить найденное.</p></div></li>
+        </ol>
+    </section>
+
+    <section class="UseCases Section Section_blue" id="use-cases" aria-labelledby="use-cases-title">
+        <div class="Section-heading">
+            <div><div class="Section-label Section-label_light Reveal"><span>04</span> Применение</div><h2 class="Section-title Reveal" id="use-cases-title">Для команд, которые работают со знаниями</h2></div>
+            <p class="Section-intro Reveal">Система разворачивается вокруг собственных документов организации и не навязывает готовый набор данных.</p>
+        </div>
+        <div class="AudienceGrid">
+            <article class="AudienceCard Reveal"><span>01</span><h3>Вузы</h3><p>Учебные материалы, методические документы, публикации кафедр и электронные библиотеки.</p></article>
+            <article class="AudienceCard Reveal"><span>02</span><h3>Научные коллективы</h3><p>Статьи, отчеты, результаты исследований и внутренняя база лаборатории.</p></article>
+            <article class="AudienceCard Reveal"><span>03</span><h3>Библиотеки и архивы</h3><p>Единая точка поиска по цифровым коллекциям и открытым каталогам.</p></article>
+            <article class="AudienceCard Reveal"><span>04</span><h3>Компании</h3><p>Техническая документация, регламенты, базы обучения и корпоративные знания.</p></article>
+        </div>
+    </section>
+
+    <section class="Advantages Section" aria-labelledby="advantages-title">
+        <div class="Section-label Reveal"><span>05</span> Отличия</div>
+        <div class="Advantages-layout">
+            <div><h2 class="Section-title Reveal" id="advantages-title">Контроль над данными без потери удобства</h2><p class="Section-intro Reveal">Архитектура рассчитана на развитие от локального проекта до внутренней системы знаний организации.</p></div>
+            <div class="Advantages-list">
+                <article class="Reveal"><strong>01</strong><div><h3>Локальная работа</h3><p>Документы и контекст модели остаются в выбранной инфраструктуре.</p></div></article>
+                <article class="Reveal"><strong>02</strong><div><h3>Открытый стек</h3><p>Java 17, Spring Boot, PostgreSQL, Liquibase, Docker и документированное API.</p></div></article>
+                <article class="Reveal"><strong>03</strong><div><h3>Настройка под предметную область</h3><p>Тематики и рекомендации формируются по фактическому содержанию базы пользователя.</p></div></article>
+                <article class="Reveal"><strong>04</strong><div><h3>Проверяемость</h3><p>Ответ связан с найденными источниками, а совпадения видны в исходном тексте.</p></div></article>
+            </div>
+        </div>
+    </section>
+
+    <section class="Project Section Section_tinted" id="project" aria-labelledby="project-title">
+        <div class="Section-heading">
+            <div><div class="Section-label Reveal"><span>06</span> Паспорт проекта</div><h2 class="Section-title Reveal" id="project-title">Научный поиск</h2></div>
+            <p class="Section-intro Reveal">Программный продукт для точного, безопасного и настраиваемого поиска по академическим и внутренним материалам.</p>
+        </div>
+        <div class="ProjectGrid">
+            <article class="ProjectCard ProjectCard_large Reveal"><p class="Card-kicker">Цель</p><h3>Сократить путь от вопроса до проверяемого знания</h3><p>Проект создает независимую от внешних сервисов поисковую среду, которую организация наполняет собственными источниками и адаптирует под предметную область.</p></article>
+            <article class="ProjectCard Reveal"><p class="Card-kicker">Технологии</p><h3>Java и Spring</h3><p>PostgreSQL, морфология русского языка, многопоточная индексация и локальная LLM.</p></article>
+            <article class="ProjectCard Reveal"><p class="Card-kicker">Модель развития</p><h3>B2B и пилотные внедрения</h3><p>Лицензии, корпоративные развертывания, настройка, сопровождение и обучение.</p></article>
+        </div>
+        <div class="Roadmap Reveal" aria-labelledby="roadmap-title">
+            <div><p class="Card-kicker">План развития</p><h3 id="roadmap-title">От поискового ядра к отраслевой системе знаний</h3></div>
+            <ol>
+                <li><span>Этап 1</span><strong>Надежный поиск</strong><p>Стабилизация обхода сайтов, индексации PDF и DOCX, лемматизации и ранжирования.</p></li>
+                <li><span>Этап 2</span><strong>Аналитика</strong><p>Тематические обзоры, рекомендации и подключение к LMS и внутренним API.</p></li>
+                <li><span>Этап 3</span><strong>Персонализация</strong><p>Отраслевые профили и адаптация локальной модели под узкие предметные области.</p></li>
+            </ol>
+        </div>
+    </section>
+
+    <section class="Contact Section" id="contacts" aria-labelledby="contact-title">
+        <div class="Contact-card Reveal">
+            <div class="Contact-main"><div class="Section-label"><span>07</span> Команда и контакты</div><h2 class="Section-title" id="contact-title">Создано в академической среде для академической среды</h2><p>Автор проекта</p><h3>Солопенко Виктория Владимировна</h3><p>РГАУ МСХА им. К.А. Тимирязева</p></div>
+            <div class="Contact-links">
+                <a href="mailto:solopenko2005@yandex.ru"><span>Электронная почта</span><strong>solopenko2005@yandex.ru</strong></a>
+                <a href="tel:+79042921841"><span>Телефон</span><strong>+7 (904) 292-18-41</strong></a>
+            </div>
+        </div>
+        <div class="Support Reveal"><div class="Support-mark" aria-hidden="true">ФСИ</div><p>Работа выполнена при финансовой поддержке Фонда содействия инновациям.</p><a href="https://fasie.ru/" target="_blank" rel="noopener noreferrer">О Фонде</a></div>
+    </section>
+
+    <section class="FinalCta" aria-labelledby="cta-title">
+        <canvas class="FinalCta-waves" data-final-waves aria-hidden="true"></canvas>
+        <div class="FinalCta-content Reveal"><p>Ваша база знаний может работать как единая система</p><h2 id="cta-title">Начните с первого источника</h2><a class="Button Button_light" href="/login">Перейти в поисковую систему</a></div>
+    </section>
+</main>
+
+<footer class="LandingFooter">
+    <div><a class="LandingBrand LandingBrand_footer" href="/"><span class="LandingBrand-mark" aria-hidden="true">НП</span><span>Научный поиск</span></a><p>Локальная поисковая система для работы с научными знаниями.</p></div>
+    <nav aria-label="Ссылки в подвале"><a href="#about">О продукте</a><a href="#capabilities">Возможности</a><a href="/privacy">Политика обработки персональных данных</a><a href="mailto:solopenko2005@yandex.ru">Связаться с автором</a></nav>
+    <p class="LandingFooter-copy">© 2026 Научный поиск</p>
+</footer>
+
+<aside class="CookieNotice" role="dialog" aria-label="Уведомление о cookie" aria-live="polite" data-cookie-notice hidden>
+    <p>Мы используем только технические cookie для авторизации, безопасности и сохранения настроек.</p>
+    <div><a href="/privacy#cookies">Подробнее</a><button type="button" data-cookie-accept>Понятно</button></div>
+</aside>
+</body>
+</html>

@@ -34,8 +34,10 @@ spring:
   servlet:
     multipart:
       enabled: true
-      max-file-size: 25MB      # максимальный размер загружаемого DOCX/PDF файла
-      max-request-size: 25MB
+      # Large uploads are spooled to disk instead of being retained in the JVM heap.
+      file-size-threshold: 2MB
+      max-file-size: ${DOCUMENT_MAX_FILE_SIZE:200MB}
+      max-request-size: ${DOCUMENT_MAX_REQUEST_SIZE:1GB}
 
   jpa:
     hibernate:
@@ -90,9 +92,14 @@ app:
 indexing-settings:
   documents:
     enabled: ${DOCUMENT_INDEXING_ENABLED:true}
-    max-file-size-bytes: ${DOCUMENT_MAX_FILE_SIZE_BYTES:52428800}
+    max-file-size-bytes: ${DOCUMENT_MAX_FILE_SIZE_BYTES:209715200}
   userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36"
   referrer: "http://www.google.com"
+  site-parallelism: ${INDEXING_SITE_PARALLELISM:6}
+  crawl-parallelism: ${INDEXING_CRAWL_PARALLELISM:12}
+  max-pages-per-site: ${INDEXING_MAX_PAGES_PER_SITE:1000}
+  max-depth: ${INDEXING_MAX_DEPTH:12}
+  request-delay-millis: ${INDEXING_REQUEST_DELAY_MILLIS:35}
   sites:
     - url: https://www.vetpress.ru/jour
       name: "Журнал: Аграрная наука"

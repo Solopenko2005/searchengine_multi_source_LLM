@@ -1,0 +1,70 @@
+spring:
+  application:
+    name: social-network-authorization
+
+  datasource:
+    url: ${AUTH_DB_URL:jdbc:postgresql://localhost:5432/search_engine}
+    username: ${AUTH_DB_USERNAME:postgres}
+    password: ${AUTH_DB_PASSWORD:}
+    hikari:
+      schema: auth_schema
+      connection-init-sql: CREATE SCHEMA IF NOT EXISTS auth_schema;
+      connection-timeout: 10000
+
+  liquibase:
+    clear-checksums: true
+    enabled: true
+    change-log: classpath:/db/changelog/db.changelog-master.yml
+
+  data:
+    redis:
+      client-type: lettuce
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    listener:
+      auto-startup: ${KAFKA_LISTENER_ENABLED:false}
+    topic:
+      registrationRequest: check-user-if-exists-request
+      registrationResponse: check-user-if-exists-response
+      blockResponse: account-block
+      deleteResponse: account-delete
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: social-network-authorization-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: '*'
+        spring.json.use.type.headers: true
+
+eureka:
+  client:
+    enabled: ${EUREKA_ENABLED:false}
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+
+email:
+  service:
+    url: ${EMAIL_SERVICE_URL:http://localhost:8771}
+
+app:
+  frontend:
+    base-url: ${SEARCH_APP_URL:http://localhost:8080}
+  integrations:
+    account-service-enabled: ${ACCOUNT_SERVICE_ENABLED:false}
+  registration:
+    default-role: ${REGISTRATION_DEFAULT_ROLE:USER}
+    bootstrap-admin-emails: ${BOOTSTRAP_ADMIN_EMAILS:}
+  jwt:
+    secret: ${AUTH_JWT_SECRET:}
+
+server:
+  port: ${AUTH_SERVER_PORT:5555}

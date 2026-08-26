@@ -4,33 +4,35 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <title>Регистрация — поисковая система</title>
+    <title data-i18n-title="auth.register.title">Регистрация — поисковая система</title>
     <link rel="stylesheet" href="/assets/css/fonts.css">
-    <link rel="stylesheet" href="/assets/css/login.css">
+    <link rel="stylesheet" href="/assets/css/login.css?v=20260811-2">
+    <script defer src="/assets/js/i18n.js?v=20260811-2"></script>
 </head>
 <body>
 <main class="auth-layout auth-layout_register">
-    <img class="auth-logo" src="/assets/img/auth-logo.png" alt="Логотип поисковой системы">
+    <div class="LanguageSwitch AuthLanguageSwitch"><button type="button" data-language="ru">RU</button><button type="button" data-language="en">EN</button></div>
+    <img class="auth-logo" src="/assets/img/auth-logo.png" alt="Логотип поисковой системы" data-i18n-alt="auth.logo">
 
     <div class="auth-container">
         <section class="auth-intro" aria-labelledby="welcome-title">
             <div class="auth-intro__content">
-                <h1 id="welcome-title">Создайте аккаунт</h1>
-                <p>
-                    После регистрации вам будет назначена роль администратора поисковой системы.
-                    Вы сможете индексировать источники и документы, выполнять поиск и работать с LLM-ассистентом.
+                <h1 id="welcome-title" data-i18n="auth.create.title">Создайте аккаунт</h1>
+                <p data-i18n="auth.create.intro">
+                    Выберите подходящий тип доступа. Посетитель работает с источниками администратора,
+                    а права администратора активируются после подтверждения e-mail.
                 </p>
-                <a class="auth-secondary-action" href="/login">Уже есть аккаунт</a>
+                <a class="auth-secondary-action" href="/login" data-i18n="auth.already">Уже есть аккаунт</a>
             </div>
 
             <footer class="auth-footer">
-                <span>Поисковая система</span>
-                <span>Доступ: <strong>Администратор</strong></span>
+                <span data-i18n="app.name">Поисковая система</span>
+                <span><span data-i18n="auth.access">Доступ:</span> <strong data-i18n="role.select">на выбор</strong></span>
             </footer>
         </section>
 
         <section class="login-card registration-card" aria-labelledby="registration-title">
-            <h2 id="registration-title">Регистрация</h2>
+            <h2 id="registration-title" data-i18n="auth.signup">Регистрация</h2>
 
             <div class="login-message login-message_error" role="alert" th:if="${registrationError}"
                  th:text="${registrationError}"></div>
@@ -40,12 +42,12 @@
 
                 <div class="registration-name-row">
                     <div class="login-field">
-                        <label for="firstName">Имя</label>
+                        <label for="firstName" data-i18n="auth.firstName">Имя</label>
                         <input id="firstName" name="firstName" type="text" autocomplete="given-name"
                                th:value="${firstName}" required autofocus>
                     </div>
                     <div class="login-field">
-                        <label for="lastName">Фамилия</label>
+                        <label for="lastName" data-i18n="auth.lastName">Фамилия</label>
                         <input id="lastName" name="lastName" type="text" autocomplete="family-name"
                                th:value="${lastName}" required>
                     </div>
@@ -58,18 +60,33 @@
                 </div>
 
                 <div class="login-field">
-                    <label for="password">Пароль — не менее 8 символов</label>
+                    <label for="password" data-i18n="auth.password.rule">Пароль — не менее 8 символов</label>
                     <input id="password" name="password" type="password" autocomplete="new-password"
                            minlength="8" required>
                 </div>
 
                 <div class="login-field">
-                    <label for="confirmPassword">Повторите пароль</label>
+                    <label for="confirmPassword" data-i18n="auth.confirmPassword">Повторите пароль</label>
                     <input id="confirmPassword" name="confirmPassword" type="password"
                            autocomplete="new-password" minlength="8" required>
                 </div>
 
-                <button class="login-submit registration-submit" type="submit">Зарегистрироваться</button>
+                <fieldset class="AccessChoice">
+                    <legend data-i18n="auth.access.choose">Выберите тип доступа</legend>
+                    <label class="AccessChoice-option">
+                        <input type="radio" name="role" value="USER"
+                               th:checked="${role == null or role == 'USER'}">
+                        <span><strong data-i18n="role.visitor">Посетитель</strong><small data-i18n="role.visitor.help">Статистика, поиск и ассистент по источникам администратора</small></span>
+                    </label>
+                    <label class="AccessChoice-option">
+                        <input type="radio" name="role" value="ADMIN"
+                               th:checked="${role == 'ADMIN'}">
+                        <span><strong data-i18n="role.admin">Администратор</strong><small data-i18n="role.admin.help">Управление источниками и группами после подтверждения e-mail</small></span>
+                    </label>
+                    <p class="AccessChoice-note" data-i18n="role.admin.verify">Для администратора мы отправим письмо со ссылкой подтверждения на указанный адрес.</p>
+                </fieldset>
+
+                <button class="login-submit registration-submit" type="submit" data-i18n="auth.create">Зарегистрироваться</button>
             </form>
         </section>
     </div>
