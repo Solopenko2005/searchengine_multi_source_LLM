@@ -3,7 +3,6 @@ FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /workspace
 COPY Searchengine_1/pom.xml ./pom.xml
 COPY Searchengine_1/libs ./libs
-RUN mvn --batch-mode --no-transfer-progress dependency:go-offline
 
 COPY Searchengine_1/src ./src
 RUN mvn --batch-mode --no-transfer-progress -DskipTests package
