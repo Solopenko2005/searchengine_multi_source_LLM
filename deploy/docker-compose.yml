@@ -2,14 +2,14 @@ name: scientific-search
 
 services:
   database:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres18_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
@@ -147,7 +147,7 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
+  postgres18_data:
   redis_data:
   assistant_vectors:
   search_logs:

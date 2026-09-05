@@ -75,7 +75,7 @@ curl -fsSL https://lmstudio.ai/install.sh | bash
 lms daemon up
 lms get qwen/qwen3-8b@q4_k_m --gguf
 lms get nomic-ai/nomic-embed-text-v1.5@q4_k_m --gguf
-lms load qwen/qwen3-8b --identifier local-qwen3-8b --parallel 2 --yes
+lms load qwen/qwen3-8b --identifier local-qwen3-8b --context-length 8192 --gpu off --yes
 lms load nomic-ai/nomic-embed-text-v1.5 --identifier text-embedding-nomic-embed-text-v1.5 --yes
 lms server start --port 1234 --bind 0.0.0.0
 ```
@@ -83,8 +83,8 @@ lms server start --port 1234 --bind 0.0.0.0
 Командой `lms ls` проверьте фактические идентификаторы загруженных моделей и при
 необходимости скорректируйте две команды `load`. Сервер слушает сетевой интерфейс,
 чтобы к нему мог обратиться контейнер приложения, но firewall обязан блокировать
-публичный доступ к 1234. Для постоянной работы настройте llmster как systemd-службу
-по официальной инструкции LM Studio.
+публичный доступ к 1234. Для постоянной работы используйте готовую systemd-службу
+`deploy/systemd/lmstudio.service`, подготовленную по официальной инструкции LM Studio.
 
 ## 4. Запуск и проверка
 
