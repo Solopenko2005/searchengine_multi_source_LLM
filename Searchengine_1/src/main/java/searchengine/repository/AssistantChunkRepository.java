@@ -14,6 +14,8 @@ import java.util.List;
 public interface AssistantChunkRepository extends JpaRepository<AssistantChunk, Long> {
     boolean existsByPageId(Integer pageId);
 
+    long countByStatus(AssistantChunkStatus status);
+
     List<AssistantChunk> findByStatusOrderByIdAsc(AssistantChunkStatus status, Pageable pageable);
 
     @Query("SELECT c FROM AssistantChunk c JOIN FETCH c.page p WHERE c.status = :status ORDER BY c.id")

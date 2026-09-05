@@ -491,7 +491,7 @@ public class AssistantService {
         ctx.append("КОНТЕКСТ (фрагменты документов пользователя):\n\n");
         boolean localProvider = llmClient.isLocalProvider();
         int localTextChars = localProvider
-                ? Math.max(180, 3_600 / Math.max(1, docs.size()))
+                ? Math.max(180, config.getRag().getLocalContextChars() / Math.max(1, docs.size()))
                 : Integer.MAX_VALUE;
         for (RetrievedDoc d : docs) {
             ctx.append("[").append(d.index).append("] ");

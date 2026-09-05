@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Service
@@ -39,6 +40,7 @@ public class EmbeddingIndexCoordinator {
     private final Executor executor;
     private final AtomicBoolean running = new AtomicBoolean();
     private final AtomicBoolean paused = new AtomicBoolean();
+    private final AtomicInteger interactiveRequests = new AtomicInteger();
 
     public EmbeddingIndexCoordinator(AssistantConfig config, PageRepository pageRepository,
                                      AssistantChunkRepository chunkRepository, TextChunker chunker,
@@ -63,11 +65,11 @@ public class EmbeddingIndexCoordinator {
 
     @Scheduled(fixedDelayString = "${assistant.embedding.scan-delay-millis:5000}")
     public void scheduledScan() {
-        if (!paused.get()) executor.execute(this::scanNow);
+        if (!workPaused() && !running.get()) executor.execute(this::scanNow);
     }
 
     public void scanNow() {
-        if (paused.get() || !config.getEmbedding().isEnabled() || !running.compareAndSet(false, true)) return;
+        if (workPaused() || !config.getEmbedding().isEnabled() || !running.compareAndSet(false, true)) return;
         try {
             int batch = Math.max(1, config.getEmbedding().getScanBatchSize());
             List<AssistantChunk> pending = chunkRepository.findByStatusOrderByIdAsc(
@@ -88,7 +90,7 @@ public class EmbeddingIndexCoordinator {
     private List<AssistantChunk> createChunks(List<Integer> pageIds) {
         List<AssistantChunk> chunks = new ArrayList<>();
         for (Page page : pageRepository.findAllById(pageIds)) {
-            if (paused.get()) break;
+            if (workPaused()) break;
             if (page.getSite() == null || (page.getCode() != null && page.getCode() >= 400)) continue;
             String plainText = page.getContent() == null ? "" : Jsoup.parse(page.getContent()).text();
             List<String> parts = chunker.split(plainText);
@@ -123,7 +125,7 @@ public class EmbeddingIndexCoordinator {
 
     private void embedChunks(List<AssistantChunk> chunks) {
         int batchSize = Math.max(1, config.getEmbedding().getBatchSize());
-        for (int from = 0; from < chunks.size() && !paused.get(); from += batchSize) {
+        for (int from = 0; from < chunks.size() && !workPaused(); from += batchSize) {
             List<AssistantChunk> batch = chunks.subList(from, Math.min(chunks.size(), from + batchSize));
             try {
                 List<float[]> vectors = embeddingClient.embedDocuments(
@@ -158,6 +160,14 @@ public class EmbeddingIndexCoordinator {
     private void rebuildVectorIndex() {
         if (!config.getEmbedding().isEnabled()) return;
         try {
+            long readyChunks = chunkRepository.countByStatus(AssistantChunkStatus.READY);
+            int indexedChunks = vectorIndex.documentCount();
+            if (readyChunks > 0 && readyChunks == indexedChunks) {
+                log.info("Используется сохранённый векторный индекс: {} фрагментов", indexedChunks);
+                return;
+            }
+            log.info("Восстановление векторного индекса: в базе {}, на диске {} фрагментов",
+                    readyChunks, indexedChunks);
             vectorIndex.reset();
             int page = 0;
             int size = 500;
@@ -186,6 +196,7 @@ public class EmbeddingIndexCoordinator {
         result.put("model", embeddingClient.model());
         result.put("running", running.get());
         result.put("paused", paused.get());
+        result.put("prioritizingAssistant", interactiveRequests.get() > 0);
         if (sourceIds == null || sourceIds.isEmpty()) {
             result.put("pages", 0L); result.put("processedPages", 0L);
             result.put("chunks", 0L); result.put("readyChunks", 0L); result.put("skippedPages", 0L);
@@ -213,6 +224,19 @@ public class EmbeddingIndexCoordinator {
 
     public void pause() { paused.set(true); }
     public void resume() { paused.set(false); scheduledScan(); }
+
+    public void beginInteractiveRequest() {
+        interactiveRequests.incrementAndGet();
+    }
+
+    public void endInteractiveRequest() {
+        int remaining = interactiveRequests.updateAndGet(value -> Math.max(0, value - 1));
+        if (remaining == 0 && !paused.get()) scheduledScan();
+    }
+
+    private boolean workPaused() {
+        return paused.get() || interactiveRequests.get() > 0;
+    }
 
     @Transactional
     public int retryFailed() {

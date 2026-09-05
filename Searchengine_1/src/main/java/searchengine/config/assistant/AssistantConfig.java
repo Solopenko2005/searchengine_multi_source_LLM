@@ -91,6 +91,9 @@ public class AssistantConfig {
         /** Общий предохранитель размера входа до отправки во внешний API. */
         private int maxInputChars = 50000;
 
+        /** Total document excerpt budget for a CPU-hosted local language model. */
+        private int localContextChars = 3600;
+
         /** Сколько документов одновременно использовать при семантическом анализе тематик. */
         private int topicDocumentLimit = 80;
 

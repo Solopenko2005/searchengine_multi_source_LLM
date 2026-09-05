@@ -66,6 +66,15 @@ public class LocalVectorIndexService {
         }
     }
 
+    public synchronized int documentCount() {
+        try {
+            refreshReader();
+            return reader.numDocs();
+        } catch (IOException exception) {
+            throw new IllegalStateException("Не удалось проверить локальный векторный индекс", exception);
+        }
+    }
+
     public synchronized void upsertAll(List<VectorDocument> vectors) {
         if (vectors == null || vectors.isEmpty()) return;
         try {

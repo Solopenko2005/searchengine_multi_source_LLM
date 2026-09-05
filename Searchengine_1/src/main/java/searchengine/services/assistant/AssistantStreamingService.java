@@ -23,15 +23,18 @@ public class AssistantStreamingService {
     private final AssistantService assistantService;
     private final LlmClient llmClient;
     private final AssistantMetricsService metricsService;
+    private final EmbeddingIndexCoordinator embeddingIndexCoordinator;
     private final Executor executor;
     private final Map<String, ActiveRequest> active = new ConcurrentHashMap<>();
 
     public AssistantStreamingService(AssistantService assistantService, LlmClient llmClient,
                                      AssistantMetricsService metricsService,
+                                     EmbeddingIndexCoordinator embeddingIndexCoordinator,
                                      @Qualifier("assistantRequestExecutor") Executor executor) {
         this.assistantService = assistantService;
         this.llmClient = llmClient;
         this.metricsService = metricsService;
+        this.embeddingIndexCoordinator = embeddingIndexCoordinator;
         this.executor = executor;
     }
 
@@ -41,11 +44,12 @@ public class AssistantStreamingService {
         SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MILLIS);
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String ownerId = authentication == null ? "" : authentication.getName();
+        cancelPreviousForOwner(ownerId);
         FutureTask<Void> task = new FutureTask<>(() -> {
             execute(requestId, request, authentication, emitter);
             return null;
         });
-        active.put(requestId, new ActiveRequest(task, ownerId));
+        active.put(requestId, new ActiveRequest(requestId, task, ownerId, emitter));
         emitter.onCompletion(() -> remove(requestId, false));
         emitter.onTimeout(() -> remove(requestId, true));
         emitter.onError(error -> remove(requestId, true));
@@ -62,6 +66,7 @@ public class AssistantStreamingService {
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
+        embeddingIndexCoordinator.beginInteractiveRequest();
         try {
             send(emitter, "progress", Map.of("stage", "retrieval", "message", "Ищу релевантные фрагменты"));
             preparation = assistantService.prepareStream(request);
@@ -106,6 +111,7 @@ public class AssistantStreamingService {
             metricsService.record(retrievalMs, generationMs, elapsedMillis(startedAt), failed);
             active.remove(requestId);
             try { emitter.complete(); } catch (Exception ignored) { }
+            embeddingIndexCoordinator.endInteractiveRequest();
             SecurityContextHolder.clearContext();
         }
     }
@@ -123,14 +129,32 @@ public class AssistantStreamingService {
         String ownerId = authentication == null ? "" : authentication.getName();
         if (request == null || !request.ownerId.equals(ownerId)) return false;
         active.remove(requestId, request);
-        return request.task.cancel(true);
+        return cancelRequest(request, true);
     }
 
     public int activeCount() { return active.size(); }
 
+    private void cancelPreviousForOwner(String ownerId) {
+        if (ownerId == null || ownerId.isBlank()) return;
+        active.forEach((requestId, request) -> {
+            if (ownerId.equals(request.ownerId) && active.remove(requestId, request)) {
+                cancelRequest(request, true);
+            }
+        });
+    }
+
+    private boolean cancelRequest(ActiveRequest request, boolean notifyClient) {
+        boolean cancelled = request.task.cancel(true);
+        if (notifyClient) {
+            safeSend(request.emitter, "cancelled", Map.of("requestId", request.requestId));
+            try { request.emitter.complete(); } catch (Exception ignored) { }
+        }
+        return cancelled;
+    }
+
     private void remove(String requestId, boolean cancel) {
         ActiveRequest request = active.remove(requestId);
-        if (cancel && request != null) request.task.cancel(true);
+        if (cancel && request != null) cancelRequest(request, false);
     }
 
     private void send(SseEmitter emitter, String name, Object data) throws IOException {
@@ -163,6 +187,7 @@ public class AssistantStreamingService {
         return false;
     }
 
-    private record ActiveRequest(FutureTask<Void> task, String ownerId) {
+    private record ActiveRequest(String requestId, FutureTask<Void> task, String ownerId,
+                                 SseEmitter emitter) {
     }
 }

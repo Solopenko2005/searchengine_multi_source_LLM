@@ -25,6 +25,26 @@ import static org.mockito.Mockito.when;
 class EmbeddingIndexCoordinatorTest {
 
     @Test
+    void reusesCompletePersistentVectorIndexOnStartup() {
+        AssistantConfig config = new AssistantConfig();
+        PageRepository pages = mock(PageRepository.class);
+        AssistantChunkRepository chunks = mock(AssistantChunkRepository.class);
+        EmbeddingClient embeddings = mock(EmbeddingClient.class);
+        LocalVectorIndexService vectorIndex = mock(LocalVectorIndexService.class);
+        when(chunks.countByStatus(AssistantChunkStatus.READY)).thenReturn(44_901L);
+        when(vectorIndex.documentCount()).thenReturn(44_901);
+        when(chunks.findByStatusOrderByIdAsc(any(), any(Pageable.class))).thenReturn(List.of());
+        when(pages.findIdsWithoutAssistantChunks(any(Pageable.class))).thenReturn(List.of());
+        EmbeddingIndexCoordinator coordinator = new EmbeddingIndexCoordinator(config, pages, chunks,
+                new TextChunker(config), embeddings, vectorIndex, Runnable::run);
+
+        coordinator.onReady();
+
+        verify(vectorIndex, never()).reset();
+        verify(vectorIndex, never()).upsertAll(any());
+    }
+
+    @Test
     void marksEmptyPageAsSkippedSoItCannotStarveTheQueue() {
         AssistantConfig config = new AssistantConfig();
         PageRepository pages = mock(PageRepository.class);

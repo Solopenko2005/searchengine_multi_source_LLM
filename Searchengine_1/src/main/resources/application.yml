@@ -69,6 +69,7 @@ assistant:
     max-chars-per-document: ${ASSISTANT_RAG_MAX_CHARS_PER_DOCUMENT:2400}
     max-history-messages: 8
     max-input-chars: ${ASSISTANT_RAG_MAX_INPUT_CHARS:50000}
+    local-context-chars: ${ASSISTANT_RAG_LOCAL_CONTEXT_CHARS:3600}
     topic-document-limit: ${ASSISTANT_TOPIC_DOCUMENT_LIMIT:80}
     topic-min-confidence: ${OPENAI_TOPIC_MIN_CONFIDENCE:0.65}
     candidate-documents: ${ASSISTANT_RAG_CANDIDATES:64}
