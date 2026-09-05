@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+!deploy/.env.production.example
 .idea/
 .vscode/
 .m2-cache/
@@ -11,6 +12,7 @@
 logs/
 **/logs/
 Searchengine_1/data/
+deploy/backups/
 **/target/
 **/*.log
 **/hs_err_pid*.log

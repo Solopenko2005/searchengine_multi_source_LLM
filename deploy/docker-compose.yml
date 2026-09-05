@@ -1,0 +1,155 @@
+name: scientific-search
+
+services:
+  database:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    shm_size: 512mb
+    networks: [backend]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [backend]
+
+  email:
+    build:
+      context: ..
+      dockerfile: deploy/docker/emailsender.Dockerfile
+    restart: unless-stopped
+    environment:
+      JAVA_TOOL_OPTIONS: ${EMAIL_JAVA_OPTIONS}
+      SENDER_PORT: 8771
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_TEST_CONNECTION: ${MAIL_TEST_CONNECTION:-true}
+    networks: [backend]
+
+  authorization:
+    build:
+      context: ..
+      dockerfile: deploy/docker/authorization.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      email:
+        condition: service_started
+    environment:
+      JAVA_TOOL_OPTIONS: ${AUTH_JAVA_OPTIONS}
+      AUTH_SERVER_PORT: 5555
+      AUTH_DB_URL: jdbc:postgresql://database:5432/${POSTGRES_DB}
+      AUTH_DB_USERNAME: ${POSTGRES_USER}
+      AUTH_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      KAFKA_LISTENER_ENABLED: "false"
+      EUREKA_ENABLED: "false"
+      ACCOUNT_SERVICE_ENABLED: "false"
+      EMAIL_SERVICE_URL: http://email:8771
+      SEARCH_APP_URL: ${APP_PUBLIC_URL}
+      REGISTRATION_DEFAULT_ROLE: USER
+      BOOTSTRAP_ADMIN_EMAILS: ${BOOTSTRAP_ADMIN_EMAILS}
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET}
+    networks: [backend]
+
+  search:
+    build:
+      context: ..
+      dockerfile: deploy/docker/search.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+      authorization:
+        condition: service_started
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      JAVA_TOOL_OPTIONS: ${SEARCH_JAVA_OPTIONS}
+      DB_URL: jdbc:postgresql://database:5432/${POSTGRES_DB}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      SECURITY_MODE: basic
+      AUTH_SERVICE_ENABLED: "true"
+      AUTH_SERVICE_URL: http://authorization:5555
+      CORS_ALLOWED_ORIGINS: ${APP_PUBLIC_URL}
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+      SERVER_SERVLET_SESSION_COOKIE_SECURE: "true"
+      SERVER_SERVLET_SESSION_COOKIE_HTTP_ONLY: "true"
+      SERVER_SERVLET_SESSION_COOKIE_SAME_SITE: lax
+      OPENAI_ENABLED: "true"
+      LLM_PROVIDER: ${LLM_PROVIDER:-LM Studio}
+      OPENAI_BASE_URL: ${LLM_BASE_URL}
+      OPENAI_API_KEY: ${LLM_API_KEY}
+      OPENAI_MODEL: ${LLM_MODEL}
+      ASSISTANT_EMBEDDING_ENABLED: "true"
+      EMBEDDING_BASE_URL: ${LLM_BASE_URL}
+      EMBEDDING_API_KEY: ${LLM_API_KEY}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      ASSISTANT_VECTOR_INDEX_PATH: /app/data/assistant-vectors
+      INDEXING_SITE_PARALLELISM: ${INDEXING_SITE_PARALLELISM:-4}
+      INDEXING_CRAWL_PARALLELISM: ${INDEXING_CRAWL_PARALLELISM:-8}
+      INDEXING_MAX_PAGES_PER_SITE: ${INDEXING_MAX_PAGES_PER_SITE:-1000}
+      ASSISTANT_RATE_LIMIT_PER_MINUTE: ${ASSISTANT_RATE_LIMIT_PER_MINUTE:-20}
+      SCOPUS_API_KEY: ${SCOPUS_API_KEY:-}
+    volumes:
+      - assistant_vectors:/app/data/assistant-vectors
+      - search_logs:/app/logs
+    networks: [backend]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      search:
+        condition: service_started
+    environment:
+      APP_HOST: ${APP_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [backend]
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  assistant_vectors:
+  search_logs:
+  caddy_data:
+  caddy_config:

@@ -30,6 +30,10 @@ Java 17, Spring Boot 2.7.18, Spring Security, Spring Data JPA, PostgreSQL, Liqui
 - `emailsender` содержит сервис отправки писем;
 - `scripts` и `run-local.ps1` запускают все компоненты локально.
 
+Для публичного Linux-сервера подготовлен Docker Compose-комплект с PostgreSQL,
+Redis, всеми тремя Java-модулями, закрытой внутренней сетью и автоматическим HTTPS.
+Инструкция находится в [deploy/README.md](deploy/README.md).
+
 ## Быстрый запуск
 
 1. Создайте PostgreSQL-базу, например `search_engine`.
