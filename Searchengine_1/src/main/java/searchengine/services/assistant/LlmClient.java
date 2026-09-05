@@ -8,6 +8,9 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.core.ParameterizedTypeReference;
+import reactor.core.publisher.Flux;
 import searchengine.config.assistant.AssistantConfig;
 import searchengine.dto.assistant.ChatMessage;
 
@@ -70,6 +73,41 @@ public class LlmClient {
         return execute(buildRequest(messages, schemaName, schema));
     }
 
+    /** Streams visible output text deltas from an OpenAI-compatible Responses endpoint. */
+    public Flux<String> stream(List<ChatMessage> messages) {
+        if (!isConfigured()) return Flux.error(new LlmException("OpenAI API не настроен"));
+        Map<String, Object> body = buildRequest(messages, null, null);
+        body.put("stream", true);
+        AssistantConfig.Llm llm = config.getLlm();
+        WebClient webClient = webClientBuilder
+                .baseUrl(trimTrailingSlash(llm.getBaseUrl()))
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + llm.getApiKey())
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .defaultHeader(HttpHeaders.ACCEPT, MediaType.TEXT_EVENT_STREAM_VALUE)
+                .build();
+        return webClient.post().uri("/responses").bodyValue(body).retrieve()
+                .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
+                .handle((event, sink) -> {
+                    String data = event.data();
+                    if (data == null || data.isBlank() || "[DONE]".equals(data)) return;
+                    try {
+                        JsonNode node = objectMapper.readTree(data);
+                        String type = node.path("type").asText();
+                        if ("response.output_text.delta".equals(type)) {
+                            String delta = node.path("delta").asText();
+                            if (!delta.isEmpty()) sink.next(delta);
+                        } else if ("response.failed".equals(type)) {
+                            sink.error(new LlmException(node.path("response").path("error")
+                                    .path("message").asText("Генерация завершилась ошибкой")));
+                        }
+                    } catch (Exception exception) {
+                        sink.error(new LlmException("Не удалось разобрать потоковый ответ", exception));
+                    }
+                })
+                .cast(String.class)
+                .timeout(Duration.ofSeconds(Math.max(5, llm.getTimeoutSeconds())));
+    }
+
     private Map<String, Object> buildRequest(List<ChatMessage> messages,
                                              String schemaName, JsonNode schema) {
         AssistantConfig.Llm llm = config.getLlm();
@@ -82,7 +120,7 @@ public class LlmClient {
             // Structured topic analysis needs substantially more room than a short
             // chat answer. Truncating it produces invalid JSON and forces fallback.
             outputTokens = schema == null
-                    ? Math.min(outputTokens, 900)
+                    ? Math.min(outputTokens, 1400)
                     : Math.max(1200, Math.min(outputTokens, 1800));
         }
         body.put("max_output_tokens", outputTokens);
@@ -249,7 +287,7 @@ public class LlmClient {
             JsonNode root = objectMapper.readTree(e.getResponseBodyAsString());
             String message = root.path("error").path("message").asText();
             if (hasText(message)) {
-                return "OpenAI API: HTTP " + e.getRawStatusCode() + " — " + message;
+                return "OpenAI API: HTTP " + e.getRawStatusCode() + ": " + message;
             }
         } catch (Exception ignored) {
         }

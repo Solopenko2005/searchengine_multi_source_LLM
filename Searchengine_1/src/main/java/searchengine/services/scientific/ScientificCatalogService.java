@@ -16,6 +16,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -77,6 +78,9 @@ public class ScientificCatalogService {
             case "doaj" -> doaj(expandedQuery, limit);
             default -> throw new IllegalArgumentException("Неизвестный научный каталог");
         };
+        articles = articles.stream()
+                .sorted(Comparator.comparingInt(this::citationCount).reversed())
+                .toList();
         if (searchCache.size() > 300) {
             Instant expiry = Instant.now().minus(CACHE_TTL);
             searchCache.entrySet().removeIf(entry -> entry.getValue().createdAt().isBefore(expiry));
@@ -281,6 +285,7 @@ public class ScientificCatalogService {
         return Map.of("name", name, "url", url, "description", description, "descriptionEn", descriptionEn);
     }
     private boolean usable(ScientificArticleDto article) { return article.getTitle() != null && !article.getTitle().isBlank() && article.getUrl() != null && !article.getUrl().isBlank(); }
+    private int citationCount(ScientificArticleDto article) { return article.getCitationCount() == null ? -1 : article.getCitationCount(); }
     private String text(JsonNode node, String field) { return node == null || node.path(field).isMissingNode() || node.path(field).isNull() ? "" : node.path(field).asText(""); }
     private String firstText(JsonNode node) { return node != null && node.isArray() && !node.isEmpty() ? node.get(0).asText("") : ""; }
     private Integer integer(JsonNode node, String field) { return node != null && node.path(field).canConvertToInt() ? node.path(field).asInt() : null; }

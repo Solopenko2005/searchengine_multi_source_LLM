@@ -164,19 +164,24 @@ input {
     border-radius: 11px;
     background: rgba(255,255,255,.08);
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .AccessChoice-option:has(input:checked) {
     border-color: var(--auth-accent);
     background: rgba(234,243,178,.17);
-    box-shadow: 0 0 0 2px rgba(234,243,178,.08);
+    box-shadow: none;
 }
+
+.AccessChoice-option:focus-within { outline: none; }
 
 .AccessChoice-option input {
     width: 17px;
     height: 17px;
     margin: 0;
     accent-color: var(--auth-accent);
+    outline: none;
+    box-shadow: none;
 }
 
 .AccessChoice-option strong,

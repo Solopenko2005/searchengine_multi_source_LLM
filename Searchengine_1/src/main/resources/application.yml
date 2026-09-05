@@ -65,12 +65,25 @@ assistant:
     timeout-seconds: 60
     retry-attempts: 3
   rag:
-    max-documents: 8
+    max-documents: ${ASSISTANT_RAG_MAX_DOCUMENTS:15}
     max-chars-per-document: 2400
     max-history-messages: 8
     max-input-chars: 50000
-    topic-document-limit: 30
+    topic-document-limit: ${ASSISTANT_TOPIC_DOCUMENT_LIMIT:80}
     topic-min-confidence: ${OPENAI_TOPIC_MIN_CONFIDENCE:0.65}
+    candidate-documents: ${ASSISTANT_RAG_CANDIDATES:64}
+  embedding:
+    enabled: ${ASSISTANT_EMBEDDING_ENABLED:true}
+    base-url: ${EMBEDDING_BASE_URL:${OPENAI_BASE_URL:http://127.0.0.1:1234/v1}}
+    api-key: ${EMBEDDING_API_KEY:${OPENAI_API_KEY:lm-studio}}
+    model: ${EMBEDDING_MODEL:text-embedding-nomic-embed-text-v1.5}
+    chunk-chars: ${ASSISTANT_CHUNK_CHARS:2600}
+    chunk-overlap-chars: ${ASSISTANT_CHUNK_OVERLAP_CHARS:320}
+    batch-size: ${ASSISTANT_EMBEDDING_BATCH_SIZE:64}
+    scan-batch-size: ${ASSISTANT_EMBEDDING_SCAN_BATCH_SIZE:128}
+    scan-delay-millis: ${ASSISTANT_EMBEDDING_SCAN_DELAY_MS:1000}
+    timeout-seconds: ${ASSISTANT_EMBEDDING_TIMEOUT_SECONDS:60}
+    index-path: ${ASSISTANT_VECTOR_INDEX_PATH:data/assistant-vectors}
 
 app:
   security:

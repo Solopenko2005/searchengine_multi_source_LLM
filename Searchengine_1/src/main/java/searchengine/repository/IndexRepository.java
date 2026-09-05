@@ -47,4 +47,15 @@ public interface IndexRepository extends JpaRepository<SearchIndex, Long> {
                                                     @Param("siteIds") Collection<Integer> siteIds,
                                                     @Param("lemmaCount") long lemmaCount,
                                                     Pageable pageable);
+
+    @Query("SELECT si.page.id FROM SearchIndex si " +
+            "WHERE si.lemma.lemma IN :lemmas AND si.page.site.id IN :siteIds " +
+            "GROUP BY si.page.id " +
+            "HAVING COUNT(DISTINCT si.lemma.lemma) >= :minimumMatch " +
+            "ORDER BY COUNT(DISTINCT si.lemma.lemma) DESC, SUM(si.ranking) DESC")
+    List<Integer> findCandidatePageIdsByLemmasAndSiteIds(
+            @Param("lemmas") Collection<String> lemmas,
+            @Param("siteIds") Collection<Integer> siteIds,
+            @Param("minimumMatch") long minimumMatch,
+            Pageable pageable);
 }

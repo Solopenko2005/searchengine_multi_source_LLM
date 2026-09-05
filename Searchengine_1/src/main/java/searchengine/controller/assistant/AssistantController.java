@@ -11,6 +11,12 @@ import searchengine.dto.assistant.AssistantExportRequest;
 import searchengine.services.assistant.AssistantService;
 import searchengine.services.assistant.AssistantProfileService;
 import searchengine.services.assistant.AssistantExportService;
+import searchengine.services.assistant.AssistantStreamingService;
+import searchengine.services.assistant.AssistantTopicJobService;
+import searchengine.services.assistant.EmbeddingIndexCoordinator;
+import searchengine.services.assistant.AssistantMetricsService;
+import searchengine.services.CurrentUserService;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -34,15 +40,75 @@ public class AssistantController {
     private final AssistantService assistantService;
     private final AssistantProfileService profileService;
     private final AssistantExportService exportService;
+    private final AssistantStreamingService streamingService;
+    private final AssistantTopicJobService topicJobService;
+    private final EmbeddingIndexCoordinator embeddingIndexCoordinator;
+    private final AssistantMetricsService metricsService;
+    private final CurrentUserService currentUserService;
 
     @PostMapping("/chat")
     public AssistantChatResponse chat(@RequestBody ChatRequest request) {
         return assistantService.chat(request);
     }
 
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter stream(@RequestBody ChatRequest request) {
+        return streamingService.stream(request);
+    }
+
+    @PostMapping("/chat/{requestId}/cancel")
+    public Map<String, Object> cancel(@PathVariable String requestId) {
+        return Map.of("result", true, "cancelled", streamingService.cancel(requestId));
+    }
+
     @GetMapping("/topics")
     public TopicsSummaryResponse topics() {
-        return assistantService.topics();
+        TopicsSummaryResponse response = assistantService.topics();
+        response.setRefreshing(topicJobService.isRunning());
+        return response;
+    }
+
+    @PostMapping("/topics/refresh")
+    public Map<String, Object> refreshTopics() {
+        boolean started = topicJobService.start();
+        return Map.of("result", true, "accepted", started,
+                "message", started ? "Анализ тематик запущен" : "Анализ тематик уже выполняется");
+    }
+
+    @GetMapping("/topics/status")
+    public Map<String, Object> topicStatus() { return topicJobService.status(); }
+
+    @GetMapping("/semantic/status")
+    public Map<String, Object> semanticStatus() {
+        return embeddingIndexCoordinator.status(profileService.resolve(java.util.List.of(), "").getSourceIds());
+    }
+
+    @PostMapping("/semantic/pause")
+    public Map<String, Object> pauseSemanticIndex() {
+        requireAdmin();
+        embeddingIndexCoordinator.pause();
+        return Map.of("result", true, "paused", true);
+    }
+
+    @PostMapping("/semantic/resume")
+    public Map<String, Object> resumeSemanticIndex() {
+        requireAdmin();
+        embeddingIndexCoordinator.resume();
+        return Map.of("result", true, "paused", false);
+    }
+
+    @PostMapping("/semantic/retry")
+    public Map<String, Object> retrySemanticIndex() {
+        requireAdmin();
+        return Map.of("result", true, "reset", embeddingIndexCoordinator.retryFailed());
+    }
+
+    @GetMapping("/metrics")
+    public Map<String, Object> metrics() {
+        Map<String, Object> result = new HashMap<>(metricsService.snapshot());
+        result.put("result", true);
+        result.put("activeStreams", streamingService.activeCount());
+        return result;
     }
 
     @GetMapping("/status")
@@ -78,5 +144,9 @@ public class AssistantController {
                         "attachment; filename=assistant-report." + normalized)
                 .contentType(mediaType)
                 .body(data);
+    }
+
+    private void requireAdmin() {
+        if (!currentUserService.isAdmin()) throw new SecurityException("Требуются права администратора");
     }
 }

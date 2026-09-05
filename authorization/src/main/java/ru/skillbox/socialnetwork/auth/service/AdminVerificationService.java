@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.skillbox.socialnetwork.auth.client.EmailSenderClient;
 import ru.skillbox.socialnetwork.auth.dto.request.EmailRequest;
 import ru.skillbox.socialnetwork.auth.exception.AdminVerificationRequiredException;
 import ru.skillbox.socialnetwork.auth.persistense.UserEntity;
@@ -27,7 +26,7 @@ public class AdminVerificationService {
     private static final Duration TOKEN_LIFETIME = Duration.ofHours(24);
 
     private final UserRepository userRepository;
-    private final EmailSenderClient emailSenderClient;
+    private final EmailDispatchService emailDispatchService;
 
     @Value("${app.frontend.base-url:http://localhost:8080}")
     private String frontendBaseUrl = "http://localhost:8080";
@@ -55,7 +54,7 @@ public class AdminVerificationService {
                 Ссылка действует 24 часа и может быть использована только один раз.
                 Если вы не регистрировались в системе, проигнорируйте это письмо.
                 """.formatted(link);
-        emailSenderClient.sendEmail(new EmailRequest(
+        emailDispatchService.send(new EmailRequest(
                 user.getEmail(), "Подтверждение прав администратора", message, null));
     }
 

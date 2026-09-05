@@ -86,6 +86,17 @@
             <artifactId>jsoup</artifactId>
             <version>1.18.1</version>
         </dependency>
+        <!-- Persistent local HNSW vector index for the free LM Studio RAG mode. -->
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-core</artifactId>
+            <version>9.12.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.lucene</groupId>
+            <artifactId>lucene-analysis-common</artifactId>
+            <version>9.12.1</version>
+        </dependency>
         <dependency>
             <groupId>org.apache.lucene.morphology</groupId>
             <artifactId>morph</artifactId>

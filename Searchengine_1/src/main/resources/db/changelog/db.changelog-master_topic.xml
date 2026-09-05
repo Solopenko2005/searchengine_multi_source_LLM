@@ -477,4 +477,37 @@
             </column>
         </addColumn>
     </changeSet>
+
+    <changeSet id="22" author="codex">
+        <preConditions onFail="MARK_RAN"><not><tableExists tableName="assistant_chunk"/></not></preConditions>
+        <createTable tableName="assistant_chunk">
+            <column name="id" type="BIGSERIAL" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="page_id" type="INT"><constraints nullable="false" foreignKeyName="fk_assistant_chunk_page" referencedTableName="page" referencedColumnNames="id" deleteCascade="true"/></column>
+            <column name="site_id" type="INT"><constraints nullable="false" foreignKeyName="fk_assistant_chunk_site" referencedTableName="site" referencedColumnNames="id" deleteCascade="true"/></column>
+            <column name="owner_id" type="VARCHAR(255)"/>
+            <column name="chunk_index" type="INT"><constraints nullable="false"/></column>
+            <column name="content" type="TEXT"><constraints nullable="false"/></column>
+            <column name="content_hash" type="VARCHAR(64)"><constraints nullable="false"/></column>
+            <column name="embedding" type="BYTEA"/>
+            <column name="embedding_model" type="VARCHAR(255)"/>
+            <column name="status" type="VARCHAR(20)" defaultValue="PENDING"><constraints nullable="false"/></column>
+            <column name="error_message" type="TEXT"/>
+            <column name="updated_at" type="TIMESTAMP"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint tableName="assistant_chunk" columnNames="page_id,chunk_index" constraintName="uc_assistant_chunk_page_index"/>
+        <createIndex tableName="assistant_chunk" indexName="idx_assistant_chunk_site"><column name="site_id"/></createIndex>
+        <createIndex tableName="assistant_chunk" indexName="idx_assistant_chunk_page"><column name="page_id"/></createIndex>
+        <createIndex tableName="assistant_chunk" indexName="idx_assistant_chunk_status"><column name="status"/></createIndex>
+    </changeSet>
+
+    <changeSet id="23" author="codex">
+        <preConditions onFail="MARK_RAN"><not><tableExists tableName="assistant_topic_cache"/></not></preConditions>
+        <createTable tableName="assistant_topic_cache">
+            <column name="owner_id" type="VARCHAR(255)"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="scope_hash" type="VARCHAR(64)"><constraints nullable="false"/></column>
+            <column name="payload" type="TEXT"><constraints nullable="false"/></column>
+            <column name="model" type="VARCHAR(255)"/>
+            <column name="updated_at" type="TIMESTAMP"><constraints nullable="false"/></column>
+        </createTable>
+    </changeSet>
 </databaseChangeLog>

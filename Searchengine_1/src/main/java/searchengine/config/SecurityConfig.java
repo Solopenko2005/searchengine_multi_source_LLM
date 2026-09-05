@@ -57,7 +57,8 @@ public final class SecurityConfig {
                         "/api/me", "/api/sources", "/api/groups", "/api/groups/invitations/**",
                         "/api/topics/**", "/api/simple/**", "/api/indexing/status",
                         "/api/indexing/jobs").authenticated()
-                .antMatchers(HttpMethod.POST, "/api/assistant/chat", "/api/assistant/export").authenticated()
+                .antMatchers(HttpMethod.POST, "/api/assistant/chat", "/api/assistant/chat/**",
+                        "/api/assistant/export", "/api/assistant/topics/refresh").authenticated()
                 .antMatchers(HttpMethod.POST, "/api/groups/invitations/*/accept").authenticated()
                 .antMatchers(HttpMethod.PUT, "/api/assistant/profile").authenticated()
                 .antMatchers("/api/**").hasRole("ADMIN")
@@ -81,7 +82,9 @@ public final class SecurityConfig {
                     .formLogin(form -> form
                             .loginPage("/login")
                             .loginProcessingUrl("/login")
-                            .defaultSuccessUrl("/app", true)
+                            // Preserve a saved /app?join=... request so an invitation is
+                            // accepted by the visitor after authentication.
+                            .defaultSuccessUrl("/app", false)
                             .failureUrl("/login?error")
                             .permitAll())
                     .logout(logout -> logout

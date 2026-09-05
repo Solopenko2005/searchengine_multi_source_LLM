@@ -1908,7 +1908,7 @@ var DocumentUpload = function(){
                 var icon = ok ? '✅' : '❌';
                 var note = ok ? (f.message || 'проиндексирован') : (f.error || 'ошибка');
                 html += '<li class="Upload-report-item">' + icon + ' ' +
-                        (f.fileName || 'файл') + ' — ' + note + '</li>';
+                        (f.fileName || 'файл') + ': ' + note + '</li>';
             });
             html += '</ul></div>';
             $group.append(html);

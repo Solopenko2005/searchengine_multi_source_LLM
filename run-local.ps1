@@ -51,6 +51,22 @@ if ($llmProvider -match '(?i)lm\s*studio') {
                 Write-Host "Loading the LM Studio model $llmModel..."
                 & $lmsExecutable load 'qwen/qwen3-8b' --identifier $llmModel --parallel 2 --yes | Out-Null
             }
+
+            $embeddingEnabled = Get-LocalEnvValue 'ASSISTANT_EMBEDDING_ENABLED'
+            if ($embeddingEnabled -notmatch '(?i)^(false|0|no)$') {
+                $embeddingModel = Get-LocalEnvValue 'EMBEDDING_MODEL'
+                if ([string]::IsNullOrWhiteSpace($embeddingModel)) {
+                    $embeddingModel = 'text-embedding-nomic-embed-text-v1.5'
+                }
+                $previousErrorActionPreference = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                $loadedModels = (& $lmsExecutable ps 2>&1 | Out-String)
+                $ErrorActionPreference = $previousErrorActionPreference
+                if ($loadedModels -notmatch [regex]::Escape($embeddingModel)) {
+                    Write-Host "Loading the embedding model $embeddingModel..."
+                    & $lmsExecutable load $embeddingModel --identifier $embeddingModel --yes | Out-Null
+                }
+            }
         }
     }
 }

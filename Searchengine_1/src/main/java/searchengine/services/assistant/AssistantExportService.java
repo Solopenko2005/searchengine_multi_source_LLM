@@ -44,7 +44,7 @@ public class AssistantExportService {
                     StringBuilder value = new StringBuilder("[").append(source.getIndex()).append("] ")
                             .append(safe(source.getTitle()));
                     if (source.getSource() != null && !source.getSource().isBlank()) {
-                        value.append(" — ").append(source.getSource());
+                        value.append(": ").append(source.getSource());
                     }
                     if (source.getUrl() != null && !source.getUrl().isBlank()) {
                         value.append("\n").append(source.getUrl());
@@ -68,7 +68,7 @@ public class AssistantExportService {
             result.append("\nИСТОЧНИКИ\n");
             sources.stream().limit(50).forEach(source -> result.append('[').append(source.getIndex())
                     .append("] ").append(safe(source.getTitle()))
-                    .append(source.getUrl() == null ? "" : " — " + source.getUrl()).append('\n'));
+                    .append(source.getUrl() == null ? "" : ": " + source.getUrl()).append('\n'));
         }
         return result.toString();
     }

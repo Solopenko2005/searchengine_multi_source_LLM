@@ -10,6 +10,7 @@
 .codex-services-work-*/
 logs/
 **/logs/
+Searchengine_1/data/
 **/target/
 **/*.log
 **/hs_err_pid*.log

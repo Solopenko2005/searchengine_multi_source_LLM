@@ -15,6 +15,11 @@ import java.util.Collection;
 
 @Repository
 public interface PageRepository extends JpaRepository<Page, Integer> {
+    interface ScopeRevision {
+        Long getPageCount();
+        Long getMaxPageId();
+        Long getSumPageIds();
+    }
     interface SitePageSummary {
         Integer getSiteId();
         Long getPageCount();
@@ -92,5 +97,18 @@ public interface PageRepository extends JpaRepository<Page, Integer> {
                                                 @Param("ownerIds") Collection<String> ownerIds,
                                                 @Param("includeLegacy") boolean includeLegacy,
                                                 Pageable pageable);
+
+    @Query("SELECT p.id FROM Page p WHERE p.code < 400 AND " +
+            "NOT EXISTS (SELECT c.id FROM AssistantChunk c WHERE c.page = p) ORDER BY p.id")
+    List<Integer> findIdsWithoutAssistantChunks(Pageable pageable);
+
+    @Query("SELECT COUNT(p.id) FROM Page p WHERE p.site.id IN :siteIds AND p.code < 400")
+    long countAssistantIndexableBySiteIds(@Param("siteIds") Collection<Integer> siteIds);
+
+    @Query("SELECT COUNT(p.id) AS pageCount, COALESCE(MAX(p.id), 0) AS maxPageId, " +
+            "COALESCE(SUM(p.id), 0) AS sumPageIds FROM Page p WHERE p.site.id IN :siteIds")
+    ScopeRevision scopeRevision(@Param("siteIds") Collection<Integer> siteIds);
+
+    long countBySiteIdIn(Collection<Integer> siteIds);
 
 }

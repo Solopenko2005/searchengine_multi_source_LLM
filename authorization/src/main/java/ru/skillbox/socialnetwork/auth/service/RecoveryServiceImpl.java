@@ -5,7 +5,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
-import ru.skillbox.socialnetwork.auth.client.EmailSenderClient;
 import ru.skillbox.socialnetwork.auth.dto.request.ChangeEmailRequest;
 import ru.skillbox.socialnetwork.auth.dto.request.ChangePasswordRequest;
 import ru.skillbox.socialnetwork.auth.dto.request.EmailRequest;
@@ -36,7 +35,7 @@ public class RecoveryServiceImpl implements RecoveryService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final EmailSenderClient emailSenderClient;
+    private final EmailDispatchService emailDispatchService;
     private final PasswordResetTokenRepository resetTokenRepository;
 
     @Value("${app.frontend.base-url:http://localhost:8080}")
@@ -80,7 +79,7 @@ public class RecoveryServiceImpl implements RecoveryService {
                 null
         );
 
-        emailSenderClient.sendEmail(emailRequest);
+        emailDispatchService.send(emailRequest);
     }
 
     @Override

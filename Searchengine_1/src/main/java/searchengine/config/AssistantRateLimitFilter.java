@@ -28,7 +28,11 @@ public class AssistantRateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith("/api/assistant/");
+        if (!"POST".equalsIgnoreCase(request.getMethod())) return true;
+        String uri = request.getRequestURI();
+        return !("/api/assistant/chat".equals(uri)
+                || "/api/assistant/chat/stream".equals(uri)
+                || "/api/assistant/topics/refresh".equals(uri));
     }
 
     @Override

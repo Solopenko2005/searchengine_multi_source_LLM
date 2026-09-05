@@ -25,6 +25,9 @@ public class AssistantConfig {
      */
     private Rag rag = new Rag();
 
+    /** Local semantic index built from the user's sources. */
+    private Embedding embedding = new Embedding();
+
     @Data
     public static class Llm {
         /** Провайдер API. Сейчас полноценно поддерживается OpenAI Responses API. */
@@ -89,9 +92,36 @@ public class AssistantConfig {
         private int maxInputChars = 50000;
 
         /** Сколько документов одновременно использовать при семантическом анализе тематик. */
-        private int topicDocumentLimit = 30;
+        private int topicDocumentLimit = 80;
 
         /** Minimum LLM confidence required to expose a detected topic. */
         private double topicMinConfidence = 0.65;
+
+        /** Number of lexical/vector candidates merged before final context selection. */
+        private int candidateDocuments = 32;
+    }
+
+    @Data
+    public static class Embedding {
+        /** Embeddings are optional: lexical search remains available while they are built. */
+        private boolean enabled = true;
+
+        /** OpenAI-compatible endpoint. Empty means reuse assistant.llm.base-url. */
+        private String baseUrl = "";
+
+        /** Empty means reuse assistant.llm.api-key. */
+        private String apiKey = "";
+
+        private String model = "text-embedding-nomic-embed-text-v1.5";
+
+        /** Approximate chunk size in characters; paragraphs are kept intact where possible. */
+        private int chunkChars = 2600;
+
+        private int chunkOverlapChars = 320;
+        private int batchSize = 64;
+        private int scanBatchSize = 128;
+        private long scanDelayMillis = 1000;
+        private int timeoutSeconds = 60;
+        private String indexPath = "data/assistant-vectors";
     }
 }

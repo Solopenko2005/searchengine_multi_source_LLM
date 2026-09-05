@@ -11,6 +11,7 @@ import searchengine.dto.assistant.ChatMessage;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -108,5 +109,40 @@ class LlmClientTest {
         LlmClient client = new LlmClient(config, new ObjectMapper(), WebClient.builder());
 
         assertThat(client.isConfigured()).isFalse();
+    }
+
+    @Test
+    void streamsResponsesApiTextDeltas() throws Exception {
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/responses", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            String response = """
+                    event: response.output_text.delta
+                    data: {"type":"response.output_text.delta","delta":"Первая "}
+
+                    event: response.output_text.delta
+                    data: {"type":"response.output_text.delta","delta":"часть"}
+
+                    data: [DONE]
+
+                    """;
+            byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream; charset=utf-8");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+        server.start();
+
+        AssistantConfig config = new AssistantConfig();
+        config.getLlm().setApiKey("test-key");
+        config.getLlm().setBaseUrl("http://localhost:" + server.getAddress().getPort());
+        config.getLlm().setModel("gpt-test");
+        LlmClient client = new LlmClient(config, new ObjectMapper(), WebClient.builder());
+
+        List<String> deltas = client.stream(List.of(new ChatMessage("user", "Вопрос")))
+                .collectList().block(Duration.ofSeconds(5));
+
+        assertThat(deltas).containsExactly("Первая ", "часть");
     }
 }

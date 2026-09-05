@@ -25,7 +25,7 @@
     <link rel="preload" href="/assets/fonts/Montserrat/Montserrat-Light.woff2" as="font" crossorigin="anonymous">
     <link rel="preload" href="/assets/fonts/Montserrat/Montserrat-Medium.woff2" as="font" crossorigin="anonymous">
     <link rel="preload" href="/assets/fonts/Montserrat/Montserrat-ExtraBold.woff2" as="font" crossorigin="anonymous">
-    <link rel="stylesheet" href="/assets/css/fonts.css?v=82368483">
+    <link rel="stylesheet" href="/assets/css/fonts.css?v=20260905-1">
     <link rel="stylesheet" href="/assets/css/basic.css?v=82368483">
     <link rel="stylesheet" href="/assets/css/extra.css?v=82368483">
     <link rel="stylesheet" href="/assets/css/indexing-jobs.css?v=20260826-2"><!--[if lt IE 9]>
@@ -35,10 +35,10 @@
         var backendApiUrl = 'api'
     </script>
 
-    <script defer src="/assets/js/scripts.js?v=20260805-csrf-fix"></script>
+    <script defer src="/assets/js/scripts.js?v=20260905-1"></script>
     <script defer src="/assets/js/indexing-jobs.js?v=20260811-2"></script>
-    <script defer src="/assets/js/i18n.js?v=20260811-2"></script>
-    <script defer src="/assets/js/workspace.js?v=20260826-2"></script>
+    <script defer src="/assets/js/i18n.js?v=20260905-1"></script>
+    <script defer src="/assets/js/workspace.js?v=20260905-1"></script>
 
 </head>
 <body class="Site">
@@ -121,7 +121,7 @@ p.error-browser
                                 <button class="btn btn_primary API-startIndexing" data-btntype="check" data-check="false" data-alttext="Остановить" data-send="startIndexing" data-altsend="stopIndexing"><span class="btn-content">Проиндексировать базовые сайты</span>
                                 </button>
                                 <span class="IndexStatus IndexStatus_pending" id="indexingStatusBadge">Статус индекса проверяется…</span>
-                                <details class="IndexingHelp"><summary>Что делает эта кнопка?</summary><p>Она запускает повторный обход сайтов из базового списка приложения. Сайты, документы и таблицы, которые вы добавляете ниже, начинают обрабатываться автоматически — нажимать эту кнопку для них не нужно.</p></details>
+                                <details class="IndexingHelp"><summary>Что делает эта кнопка?</summary><p>Она запускает повторный обход сайтов из базового списка приложения. Сайты, документы и таблицы, которые вы добавляете ниже, начинают обрабатываться автоматически. Нажимать эту кнопку для них не нужно.</p></details>
                             </div>
                             <div class="UpdatePageBlock">
                                 <h3>Добавить новый сайт-источник:
@@ -217,7 +217,7 @@ p.error-browser
                             <div class="Section-header"><h2 class="Section-title" data-i18n="library.title">Научная библиотека</h2></div>
                             <p class="Library-intro" data-i18n="library.lead">Поиск публикаций вынесен в отдельное рабочее пространство: здесь можно подобрать статьи, проверить аннотацию и добавить материал в общую базу.</p>
                             <section class="ScientificCatalog" id="scientificCatalog">
-                                <div class="ScientificCatalog-head"><div><h3 data-i18n="library.catalog">Каталог научных публикаций</h3><p>Ищите статьи через открытые научные API или переходите в проверенные российские каталоги.</p></div></div>
+                                <div class="ScientificCatalog-head"><div><h3 data-i18n="library.catalog">Каталог научных публикаций</h3><p>Ищите статьи через открытые научные API или переходите в проверенные российские каталоги. Если каталог передаёт число цитирований, первыми показываются наиболее цитируемые работы.</p></div></div>
                                 <section class="ScientificRecommendations" aria-labelledby="scientificRecommendationsTitle">
                                     <div class="ScientificRecommendations-head">
                                         <div><h3 id="scientificRecommendationsTitle" data-i18n="library.recommendations">Рекомендации по вашим документам</h3><p data-i18n="library.recommendations.lead">Система определяет основную тему загруженных документов и предлагает близкие научные публикации.</p></div>
@@ -279,8 +279,13 @@ p.error-browser
                             <div class="Section-header">
                                 <h2 class="Section-title">LLM-ассистент</h2>
                             </div>
-                            <p class="Assistant-intro">Задайте вопрос по всем вашим источникам — сайтам, научным статьям и файлам. Ассистент найдёт релевантные материалы и даст ответ со ссылками.</p>
+                            <p class="Assistant-intro">Задайте вопрос по всем вашим источникам: сайтам, научным статьям и файлам. Ассистент найдёт релевантные материалы и даст ответ со ссылками.</p>
                             <div class="Assistant-status" id="assistantStatus"></div>
+                            <div class="Assistant-semantic" id="assistantSemanticStatus">
+                                <span class="Assistant-semantic-label">Смысловой индекс</span>
+                                <span id="assistantSemanticText">Проверяю состояние…</span>
+                                <span class="Assistant-semantic-progress"><i id="assistantSemanticProgress"></i></span>
+                            </div>
 
                             <details class="Assistant-profile" open>
                                 <summary>Настройка ассистента под мои источники</summary>
@@ -305,12 +310,13 @@ p.error-browser
                             <div class="Assistant-chat">
                                 <div class="Assistant-messages" id="assistantMessages">
                                     <div class="Assistant-msg Assistant-msg_bot">
-                                        <div class="Assistant-msg-text">Здравствуйте! Спросите меня о содержании сайтов, научных статей или файлов — я отвечу и приведу использованные источники.</div>
+                                        <div class="Assistant-msg-text">Здравствуйте! Спросите меня о содержании сайтов, научных статей или файлов. Я отвечу и приведу использованные источники.</div>
                                     </div>
                                 </div>
                                 <form class="Assistant-form" id="assistantForm" action="#" method="post">
                                     <textarea class="Assistant-input" id="assistantInput" rows="2" placeholder="Введите вопрос по вашим источникам..."></textarea>
                                     <button class="btn btn_primary Assistant-send" type="submit" id="assistantSend">Отправить</button>
+                                    <button class="btn Assistant-stop" type="button" id="assistantStop" hidden>Остановить</button>
                                 </form>
                                 <div class="Assistant-export" id="assistantExport" hidden>
                                     <span>Скачать последний ответ:</span>
@@ -337,6 +343,10 @@ p.error-browser
     .Assistant-intro { margin: 0 0 12px; color: #555; }
     .Assistant-status { font-size: 13px; margin-bottom: 16px; padding: 8px 12px; border-radius: 6px; background: #eef3fb; color: #2b5aa8; }
     .Assistant-status_warn { background: #fdf3e3; color: #9a6a12; }
+    .Assistant-semantic { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; align-items: center; margin: -8px 0 16px; padding: 9px 12px; color: #3d568f; background: rgba(159,186,241,.18); border-radius: 8px; font-size: 12px; }
+    .Assistant-semantic-label { font-weight: 700; }
+    .Assistant-semantic-progress { grid-column: 1 / -1; height: 5px; overflow: hidden; background: rgba(61,86,143,.14); border-radius: 5px; }
+    .Assistant-semantic-progress i { display: block; width: 0; height: 100%; background: linear-gradient(90deg,#3d568f,#9fbaf1,#eaf3b2); transition: width .35s ease; }
     .Assistant-profile { border: 1px solid #dce2eb; border-radius: 8px; padding: 12px; margin: 0 0 16px; background: #fafbfd; }
     .Assistant-profile summary { cursor: pointer; font-weight: 600; margin-bottom: 10px; }
     .Assistant-profile label { display: block; font-size: 13px; margin-bottom: 5px; color: #4d5968; }
@@ -377,6 +387,7 @@ p.error-browser
     .Assistant-form { display: flex; gap: 10px; padding: 12px; border-top: 1px solid #e3e6ec; background: #fafbfd; }
     .Assistant-input { flex: 1; resize: vertical; padding: 10px 12px; border: 1px solid #cdd3dd; border-radius: 6px; font-family: inherit; font-size: 14px; }
     .Assistant-send { white-space: nowrap; }
+    .Assistant-stop { color: #3d568f; background: #fdfdf5; border: 1px solid #3d568f; white-space: nowrap; }
     .Assistant-typing { color: #888; font-style: italic; }
     .Assistant-badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px; margin-left: 8px; vertical-align: middle; }
     .Assistant-badge_llm { background: #e3f5e8; color: #1f8a44; }
@@ -401,8 +412,13 @@ p.error-browser
     var profileSaveEl = document.getElementById('assistantProfileSave');
     var profileStateEl = document.getElementById('assistantProfileState');
     var exportEl = document.getElementById('assistantExport');
+    var stopBtn = document.getElementById('assistantStop');
+    var semanticTextEl = document.getElementById('assistantSemanticText');
+    var semanticProgressEl = document.getElementById('assistantSemanticProgress');
     var history = [];
     var lastExport = null;
+    var currentAbort = null;
+    var currentRequestId = null;
 
     if (!formEl) { return; }
 
@@ -478,7 +494,7 @@ p.error-browser
         var html = '<div class="Assistant-sources"><div class="Assistant-sources-title">' + tr('Источники (литература):', 'Sources (references):') + '</div><ol>';
         sources.forEach(function (s) {
             var label = esc(s.title || (tr('Источник ', 'Source ') + s.index));
-            if (s.source) { label += ' — ' + esc(s.source); }
+            if (s.source) { label += ': ' + esc(s.source); }
             var link = s.url
                 ? '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + label + '</a>'
                 : label;
@@ -511,44 +527,118 @@ p.error-browser
         if (t) { t.parentNode.removeChild(t); }
     }
 
-    function sendMessage(text) {
+    function streamMessageShell() {
+        var div = document.createElement('div');
+        div.className = 'Assistant-msg Assistant-msg_bot';
+        div.innerHTML = '<div class="Assistant-msg-text"><span class="Assistant-streamText"></span>' +
+            '<span class="Assistant-streamStage Assistant-typing"></span><span class="Assistant-streamMeta"></span></div>';
+        messagesEl.appendChild(div); scrollDown();
+        return {
+            root: div.querySelector('.Assistant-msg-text'),
+            text: div.querySelector('.Assistant-streamText'),
+            stage: div.querySelector('.Assistant-streamStage'),
+            meta: div.querySelector('.Assistant-streamMeta')
+        };
+    }
+
+    function parseSseBlock(block) {
+        var eventName = 'message';
+        var data = [];
+        block.split(/\r?\n/).forEach(function (line) {
+            if (line.indexOf('event:') === 0) eventName = line.substring(6).trim();
+            if (line.indexOf('data:') === 0) data.push(line.substring(5).trim());
+        });
+        if (!data.length) return null;
+        var value = data.join('\n');
+        try { value = JSON.parse(value); } catch (ignored) { value = { text: value }; }
+        return { name: eventName, data: value };
+    }
+
+    async function sendMessage(text) {
         addUserMessage(text);
         history.push({ role: 'user', content: text });
         inputEl.value = '';
         sendBtn.disabled = true;
-        addTyping();
+        stopBtn.hidden = false;
+        currentRequestId = 'assistant-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+        currentAbort = new AbortController();
+        var shell = streamMessageShell();
+        var answer = '';
+        var sources = [];
+        var usedLlm = false;
+        var streamError = '';
 
-        fetch(API + '/assistant/chat', {
-            method: 'POST',
-            headers: jsonHeaders(),
-            body: JSON.stringify({
-                message: text,
-                history: history.slice(0, -1),
-                profileInstructions: profileEl.value,
-                sourceIds: selectedSourceIds()
-            })
-        })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-            removeTyping();
-            if (data && data.result) {
-                addBotMessage(data.answer || tr('(пустой ответ)', '(empty response)'), data.sources, data.usedLlm);
-                history.push({ role: 'assistant', content: data.answer || '' });
-                lastExport = { question: text, answer: data.answer || '', sources: data.sources || [] };
-                exportEl.hidden = false;
-            } else {
-                addBotMessage(tr('Ошибка: ', 'Error: ') + (data && data.error ? data.error : tr('неизвестная ошибка', 'unknown error')), [], false);
+        try {
+            var response = await fetch(API + '/assistant/chat/stream', {
+                method: 'POST', headers: jsonHeaders(), signal: currentAbort.signal,
+                body: JSON.stringify({
+                    requestId: currentRequestId, message: text,
+                    history: history.slice(0, -1), profileInstructions: profileEl.value,
+                    sourceIds: selectedSourceIds()
+                })
+            });
+            if (!response.ok || !response.body) throw new Error('HTTP ' + response.status);
+            var reader = response.body.getReader();
+            var decoder = new TextDecoder('utf-8');
+            var buffer = '';
+            while (true) {
+                var part = await reader.read();
+                buffer += decoder.decode(part.value || new Uint8Array(), { stream: !part.done });
+                var blocks = buffer.split(/\r?\n\r?\n/);
+                buffer = blocks.pop() || '';
+                blocks.forEach(function (block) {
+                    var event = parseSseBlock(block);
+                    if (!event) return;
+                    if (event.name === 'progress') {
+                        shell.stage.textContent = event.data.message || '';
+                    } else if (event.name === 'sources') {
+                        sources = event.data.items || [];
+                    } else if (event.name === 'delta') {
+                        shell.stage.textContent = '';
+                        answer += event.data.text || '';
+                        shell.text.textContent = answer;
+                        scrollDown();
+                    } else if (event.name === 'done') {
+                        usedLlm = !!event.data.usedLlm;
+                        var seconds = Math.max(0, Number(event.data.totalMs || 0) / 1000).toFixed(1);
+                        shell.meta.textContent = tr(' · готово за ', ' · ready in ') + seconds + tr(' с', ' s');
+                    } else if (event.name === 'error') {
+                        streamError = event.data.message || tr('Не удалось сформировать ответ', 'Could not generate an answer');
+                    } else if (event.name === 'cancelled') {
+                        streamError = tr('Ответ остановлен пользователем', 'The response was stopped');
+                    }
+                });
+                if (part.done) break;
             }
-        })
-        .catch(function (e) {
-            removeTyping();
-            addBotMessage(tr('Не удалось связаться с сервером: ', 'Could not connect to the server: ') + e.message, [], false);
-        })
-        .finally(function () {
-            sendBtn.disabled = false;
-            inputEl.focus();
-        });
+            if (!answer) answer = streamError || tr('(пустой ответ)', '(empty response)');
+            shell.text.textContent = answer;
+            shell.stage.textContent = '';
+            shell.root.insertAdjacentHTML('beforeend', badge(usedLlm) + sourcesHtml(sources));
+            history.push({ role: 'assistant', content: answer });
+            lastExport = { question: text, answer: answer, sources: sources };
+            exportEl.hidden = false;
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                shell.stage.textContent = '';
+                if (!answer) shell.text.textContent = tr('Ответ остановлен пользователем.', 'The response was stopped.');
+            } else {
+                shell.stage.textContent = '';
+                shell.text.textContent = (answer ? answer + '\n\n' : '') +
+                    tr('Не удалось связаться с сервером: ', 'Could not connect to the server: ') + error.message;
+            }
+        } finally {
+            currentAbort = null; currentRequestId = null;
+            sendBtn.disabled = false; stopBtn.hidden = true; inputEl.focus();
+        }
     }
+
+    stopBtn.addEventListener('click', function () {
+        var requestId = currentRequestId;
+        if (currentAbort) currentAbort.abort();
+        if (requestId) fetch(API + '/assistant/chat/' + encodeURIComponent(requestId) + '/cancel', {
+            method: 'POST', headers: jsonHeaders()
+        }).catch(function () {});
+    });
 
     formEl.addEventListener('submit', function (e) {
         e.preventDefault();
@@ -578,6 +668,30 @@ p.error-browser
         .catch(function () {
             statusEl.style.display = 'none';
         });
+
+    function refreshSemanticStatus() {
+        fetch(API + '/assistant/semantic/status').then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || !semanticTextEl) return;
+                var progress = Number(data.progress || 0);
+                semanticProgressEl.style.width = Math.max(0, Math.min(100, progress)) + '%';
+                if (data.paused) {
+                    semanticTextEl.textContent = tr('приостановлен; обычный поиск продолжает работать', 'paused; regular search remains available');
+                } else if (data.failedChunks > 0) {
+                    semanticTextEl.textContent = tr('готово фрагментов: ', 'ready chunks: ') + Number(data.readyChunks || 0) +
+                        tr(', требуют повтора: ', ', need retry: ') + Number(data.failedChunks || 0);
+                } else if (progress < 100 || data.running) {
+                    semanticTextEl.textContent = tr('подготовлено страниц: ', 'processed pages: ') +
+                        Number(data.processedPages || 0) + '/' + Number(data.pages || 0) + ' (' + progress + '%)';
+                } else {
+                    semanticTextEl.textContent = tr('готов; смысловой и обычный поиск работают вместе', 'ready; semantic and regular search work together');
+                }
+            }).catch(function () {
+                if (semanticTextEl) semanticTextEl.textContent = tr('обычный поиск доступен', 'regular search is available');
+            });
+    }
+    refreshSemanticStatus();
+    window.setInterval(refreshSemanticStatus, 4000);
 
     function renderAssistantSources(sources) {
             if (!sources || !sources.length) {
@@ -706,42 +820,53 @@ p.error-browser
         window.setInterval(refreshDocumentIndexingStatus, 2000);
     }
 
-    // Популярные тематики
+    function renderTopics(data) {
+        if (!data || !data.result) {
+            topicsBody.innerHTML = '<p>' + tr('Ошибка: ', 'Error: ') + esc(data && data.error ? data.error : tr('не удалось получить темы', 'could not load topics')) + '</p>';
+            return;
+        }
+        var html = data.stale ? '<p class="Assistant-typing">' + tr('Показан предыдущий анализ; можно обновить темы.', 'Previous analysis is shown; topics can be refreshed.') + '</p>' : '';
+        if (data.summary) html += '<div class="Assistant-topics-summary">' + esc(data.summary) + badge(data.usedLlm) + '</div>';
+        if (data.topics && data.topics.length) {
+            html += '<ul class="Assistant-topics-list">';
+            data.topics.forEach(function (t) {
+                var confidence = t.confidence ? (tr(' · уверенность ', ' · confidence ') + Math.round(t.confidence * 100) + '%') : '';
+                html += '<li><span class="theme">' + t.rank + '. ' + esc(t.theme) + '</span>' +
+                    '<span class="meta">' + tr('частота ', 'frequency ') + t.frequency + tr(' · источников ', ' · sources ') + t.mentions + confidence + '</span></li>';
+                if (t.description) html += '<li><span>' + esc(t.description) + '</span></li>';
+            });
+            html += '</ul>';
+        }
+        topicsBody.innerHTML = html;
+    }
+
+    function loadTopics() {
+        return fetch(API + '/assistant/topics').then(function (r) { return r.json(); }).then(renderTopics);
+    }
+
+    function waitForTopics() {
+        fetch(API + '/assistant/topics/status').then(function (r) { return r.json(); }).then(function (status) {
+            if (status.running) {
+                window.setTimeout(waitForTopics, 1200);
+            } else {
+                topicsBtn.disabled = false;
+                if (status.error) topicsBody.innerHTML = '<p>' + tr('Ошибка анализа: ', 'Analysis error: ') + esc(status.error) + '</p>';
+                else loadTopics();
+            }
+        }).catch(function () { topicsBtn.disabled = false; });
+    }
+
     topicsBtn.addEventListener('click', function () {
         topicsBtn.disabled = true;
-        topicsBody.innerHTML = '<p class="Assistant-typing">' + tr('Анализирую источники...', 'Analyzing sources...') + '</p>';
+        topicsBody.innerHTML = '<p class="Assistant-typing">' + tr('Анализ выполняется в фоне. Можно продолжать поиск и работу с ассистентом.', 'Analysis is running in the background. You can continue searching and using the assistant.') + '</p>';
         saveProfile().catch(function () {}).then(function () {
-            return fetch(API + '/assistant/topics');
-        })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (!data || !data.result) {
-                    topicsBody.innerHTML = '<p>' + tr('Ошибка: ', 'Error: ') + esc(data && data.error ? data.error : tr('не удалось получить темы', 'could not load topics')) + '</p>';
-                    return;
-                }
-                var html = '';
-                if (data.summary) {
-                    html += '<div class="Assistant-topics-summary">' + esc(data.summary) + badge(data.usedLlm) + '</div>';
-                }
-                if (data.topics && data.topics.length) {
-                    html += '<ul class="Assistant-topics-list">';
-                    data.topics.forEach(function (t) {
-                        var confidence = t.confidence ? (tr(' · уверенность ', ' · confidence ') + Math.round(t.confidence * 100) + '%') : '';
-                        html += '<li><span class="theme">' + t.rank + '. ' + esc(t.theme) + '</span>' +
-                            '<span class="meta">' + tr('частота ', 'frequency ') + t.frequency + tr(' · источников ', ' · sources ') + t.mentions + confidence + '</span></li>';
-                        if (t.description) { html += '<li><span>' + esc(t.description) + '</span></li>'; }
-                    });
-                    html += '</ul>';
-                } else {
-                    html += '<p>' + tr('Темы пока не выделены. Добавьте источники и запустите индексацию.', 'No topics have been identified yet. Add sources and start indexing.') + '</p>';
-                }
-                topicsBody.innerHTML = html;
-            })
-            .catch(function (e) {
-                topicsBody.innerHTML = '<p>' + tr('Не удалось связаться с сервером: ', 'Could not connect to the server: ') + esc(e.message) + '</p>';
-            })
-            .finally(function () { topicsBtn.disabled = false; });
+            return fetch(API + '/assistant/topics/refresh', { method: 'POST', headers: jsonHeaders() });
+        }).then(waitForTopics).catch(function (error) {
+            topicsBtn.disabled = false;
+            topicsBody.innerHTML = '<p>' + tr('Не удалось запустить анализ: ', 'Could not start analysis: ') + esc(error.message) + '</p>';
+        });
     });
+    loadTopics().catch(function () {});
 })();
 </script>
 <script src="/assets/plg/jQuery/jquery-3.5.1.min.js"></script>

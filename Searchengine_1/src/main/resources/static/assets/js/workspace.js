@@ -196,7 +196,7 @@
         if (!target || !state.user || !state.user.admin) return;
         if (!state.groups.length) { target.textContent = t('Создайте первую группу.', 'Create your first group.'); return; }
         target.innerHTML = state.groups.map(function (group) {
-            var invite = location.origin + '/?join=' + encodeURIComponent(group.inviteCode || '');
+            var invite = location.origin + '/app?join=' + encodeURIComponent(group.inviteCode || '');
             var members = (group.members || []).map(function (member) {
                 return '<span class="GroupMember">' + esc(member) + '<button type="button" data-remove-member="' + esc(member) + '" data-group="' + group.id + '" title="' + t('Исключить', 'Remove') + '">×</button></span>';
             }).join('');
@@ -204,7 +204,7 @@
             var deleteTitle = onlyGroup ? t('У администратора должна остаться хотя бы одна группа', 'An administrator must keep at least one group') : t('Удалить группу', 'Delete group');
             return '<article class="GroupCard" data-group-card="' + group.id + '"><div class="GroupCard-head"><h4>' + esc(groupDisplayName(group)) + '</h4><div class="GroupCard-headActions"><small>' + t('Участников: ', 'Members: ') + Number(group.memberCount || 0) + '</small><button class="GroupCard-delete" type="button" data-delete-group title="' + deleteTitle + '"' + (onlyGroup ? ' disabled' : '') + '>' + t('Удалить', 'Delete') + '</button></div></div>' +
                 '<div class="GroupCard-invite"><input readonly value="' + esc(invite) + '"><button type="button" data-copy-invite>' + t('Копировать ссылку', 'Copy link') + '</button></div>' +
-                '<small class="GroupCard-inviteHelp">' + t('Отправьте ссылку посетителю. Для проверки откройте её в режиме инкогнито: ссылка не переключает уже открытый аккаунт администратора.', 'Send this link to a visitor. To test it, open it in an incognito window: it does not switch an already signed-in administrator account.') + '</small>' +
+                '<small class="GroupCard-inviteHelp">' + t('Отправьте ссылку посетителю. После входа он сразу попадёт в приложение и подключится к вашей группе. Для проверки откройте ссылку в режиме инкогнито.', 'Send this link to a visitor. After signing in, they will open the application and join your group. To test it, open the link in an incognito window.') + '</small>' +
                 '<form class="GroupCard-memberForm"><input name="userId" type="email" placeholder="' + t('E-mail зарегистрированного пользователя', 'Registered user e-mail') + '" required><button type="submit">' + t('Добавить', 'Add') + '</button></form>' +
                 '<div class="GroupMembers">' + (members || '<small>' + t('В группе пока нет посетителей', 'There are no visitors in this group yet') + '</small>') + '</div></article>';
         }).join('');

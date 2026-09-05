@@ -64,7 +64,7 @@ public class WorkspaceGroupController {
         Object code = source.get("inviteCode");
         if (code != null && !String.valueOf(code).isBlank()) {
             String root = ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
-            result.put("inviteUrl", root + "/?join=" + code);
+            result.put("inviteUrl", root + "/app?join=" + code);
         }
         result.put("result", true);
         return result;

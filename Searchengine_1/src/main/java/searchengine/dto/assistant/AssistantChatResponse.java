@@ -30,4 +30,9 @@ public class AssistantChatResponse {
      * false — резервный режим (модель не настроена/недоступна).
      */
     private boolean usedLlm;
+
+    private long retrievalMs;
+    private long generationMs;
+    private long totalMs;
+    private String retrievalMode;
 }

@@ -35,4 +35,7 @@ public class ChatRequest {
 
     /** Optional restriction to whole sources (web sites, files or API articles). */
     private List<Integer> sourceIds = new ArrayList<>();
+
+    /** Client-generated id used to cancel a streaming response. */
+    private String requestId;
 }

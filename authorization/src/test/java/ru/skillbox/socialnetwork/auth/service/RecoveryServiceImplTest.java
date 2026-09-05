@@ -4,7 +4,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import ru.skillbox.socialnetwork.auth.client.EmailSenderClient;
 import ru.skillbox.socialnetwork.auth.dto.request.ChangeEmailRequest;
 import ru.skillbox.socialnetwork.auth.dto.request.ChangePasswordRequest;
 import ru.skillbox.socialnetwork.auth.dto.request.EmailWrapper;
@@ -28,7 +27,7 @@ class RecoveryServiceImplTest {
     private RecoveryService recoveryService;
     private UserRepository userRepository;
     private PasswordEncoder passwordEncoder;
-    private  EmailSenderClient emailSenderClient;
+    private EmailDispatchService emailDispatchService;
     private PasswordResetTokenRepository resetTokenRepository;
 
     private final String email = "test@email.com";
@@ -37,13 +36,13 @@ class RecoveryServiceImplTest {
     void setUp() {
         userRepository = mock(UserRepository.class);
         passwordEncoder = mock(PasswordEncoder.class);
-        emailSenderClient = mock(EmailSenderClient.class);
+        emailDispatchService = mock(EmailDispatchService.class);
         resetTokenRepository = mock(PasswordResetTokenRepository.class);
 
         recoveryService = new RecoveryServiceImpl(
                 userRepository,
                 passwordEncoder,
-                emailSenderClient,
+                emailDispatchService,
                 resetTokenRepository);
     }
 
@@ -58,7 +57,7 @@ class RecoveryServiceImplTest {
 
             recoveryService.recovery(recoveryRequest);
 
-            verify(emailSenderClient).sendEmail(argThat(emailRequest ->
+            verify(emailDispatchService).send(argThat(emailRequest ->
                     emailRequest.address().equals(email) &&
                             emailRequest.subject().equals("Восстановление пароля поисковой системы") &&
                             emailRequest.message().contains("123456")
@@ -74,7 +73,7 @@ class RecoveryServiceImplTest {
         recoveryService.recovery(recoveryRequest);
 
         verify(userRepository).findByEmail(email);
-        verifyNoInteractions(emailSenderClient);
+        verifyNoInteractions(emailDispatchService);
     }
 
     @Test

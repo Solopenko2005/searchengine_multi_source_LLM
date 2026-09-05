@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDateTime;
 
 /**
  * Обзор популярных тематик по загруженным документам.
@@ -30,4 +31,14 @@ public class TopicsSummaryResponse {
      * true — обзор сгенерирован языковой моделью.
      */
     private boolean usedLlm;
+
+    /** True when the result was read from the persistent topic cache. */
+    private boolean cached;
+
+    /** Cached data can still be displayed while a background refresh is running. */
+    private boolean stale;
+
+    private boolean refreshing;
+
+    private LocalDateTime updatedAt;
 }
