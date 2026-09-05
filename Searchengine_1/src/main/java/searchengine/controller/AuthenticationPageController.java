@@ -23,7 +23,7 @@ public class AuthenticationPageController {
         if (authentication != null
                 && authentication.isAuthenticated()
                 && !(authentication instanceof AnonymousAuthenticationToken)) {
-            return "redirect:/";
+            return "redirect:/app";
         }
         model.addAttribute("registrationEnabled", registrationEnabled);
         return "login";

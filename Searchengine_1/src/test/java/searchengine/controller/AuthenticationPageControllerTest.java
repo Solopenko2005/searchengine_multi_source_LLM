@@ -28,6 +28,6 @@ class AuthenticationPageControllerTest {
                 UsernamePasswordAuthenticationToken.authenticated(
                         "user", "password", AuthorityUtils.createAuthorityList("ROLE_USER"));
 
-        assertThat(controller.login(authentication, new ConcurrentModel())).isEqualTo("redirect:/");
+        assertThat(controller.login(authentication, new ConcurrentModel())).isEqualTo("redirect:/app");
     }
 }

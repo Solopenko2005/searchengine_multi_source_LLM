@@ -24,7 +24,7 @@ public class RegistrationPageController {
     @GetMapping("/register")
     public String page(Authentication authentication) {
         if (isAuthenticated(authentication)) {
-            return "redirect:/";
+            return "redirect:/app";
         }
         return "register";
     }
