@@ -17,6 +17,7 @@ import searchengine.repository.WorkspaceMembershipRepository;
 import searchengine.services.CurrentUserService;
 
 import java.util.List;
+import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -97,6 +98,42 @@ class LlmTopicAnalysisServiceTest {
         assertThat(prompt).doesNotContain("Свидетельство о регистрации издания");
     }
 
+    @Test
+    void localTopicPromptFitsSmallContextWindow() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("alice", "n/a", "ROLE_USER"));
+        LlmClient client = mock(LlmClient.class);
+        when(client.isConfigured()).thenReturn(true);
+        when(client.isLocalProvider()).thenReturn(true);
+        when(client.completeJson(any(), anyString(), any())).thenReturn("""
+                {"summary":"Обзор","topics":[
+                  {"theme":"Машинное обучение","description":"Методы анализа","confidence":0.9,"documentIndexes":[1]}
+                ]}
+                """);
+        AssistantChunkRepository chunks = mock(AssistantChunkRepository.class);
+        List<Long> ids = LongStream.rangeClosed(1, 40).boxed().toList();
+        when(chunks.findRepresentativeReadyIds(any(), any(Integer.class), any(Integer.class)))
+                .thenReturn(ids);
+        List<AssistantChunk> candidates = ids.stream()
+                .map(id -> chunk(id, id.intValue(), "Цель исследования и методы машинного обучения. ".repeat(40)))
+                .toList();
+        when(chunks.findReadyWithPageByIds(any(), any(AssistantChunkStatus.class)))
+                .thenReturn(candidates);
+        AssistantConfig config = new AssistantConfig();
+        config.getRag().setTopicDocumentLimit(80);
+        LlmTopicAnalysisService service = new LlmTopicAnalysisService(client, config, mock(PageRepository.class),
+                new ObjectMapper(), new CurrentUserService(mock(WorkspaceMembershipRepository.class)), chunks);
+
+        service.analyze(ids.stream().map(Long::intValue).toList(), "Анализ научных исследований").orElseThrow();
+
+        ArgumentCaptor<List<ChatMessage>> messages = ArgumentCaptor.forClass(List.class);
+        verify(client).completeJson(messages.capture(), anyString(), any());
+        String prompt = messages.getValue().get(1).getContent();
+        assertThat(prompt.length()).isLessThan(8_500);
+        assertThat(prompt).contains("document id=\"D14\"");
+        assertThat(prompt).doesNotContain("document id=\"D15\"");
+    }
+
     private Page document() {
         Site site = new Site();
         site.setId(10);
@@ -112,12 +149,17 @@ class LlmTopicAnalysisServiceTest {
     }
 
     private AssistantChunk chunk(long id, String content) {
+        return chunk(id, 10, content);
+    }
+
+    private AssistantChunk chunk(long id, int siteId, String content) {
         Page page = document();
         page.setId((int) id);
+        page.getSite().setId(siteId);
         page.setContent("<html><body>" + content + "</body></html>");
         AssistantChunk chunk = new AssistantChunk();
         chunk.setId(id);
-        chunk.setSiteId(10);
+        chunk.setSiteId(siteId);
         chunk.setPage(page);
         chunk.setContent(content);
         chunk.setChunkIndex((int) id - 1);

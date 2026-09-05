@@ -137,6 +137,17 @@ public class AssistantProfileService {
                 .orElseGet(List::of);
     }
 
+    @Transactional
+    public void clearDetectedTopics() {
+        profileRepository.findByOwnerId(currentUserService.getUserId())
+                .filter(profile -> profile.getDetectedTopics() != null
+                        && !profile.getDetectedTopics().isBlank())
+                .ifPresent(profile -> {
+                    profile.setDetectedTopics("");
+                    profileRepository.save(profile);
+                });
+    }
+
     /** Backward-compatible overload used by older callers/tests. */
     @Transactional(readOnly = true)
     public ResolvedProfile resolve(List<Integer> requestDocumentIds, String requestInstructions) {

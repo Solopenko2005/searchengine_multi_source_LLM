@@ -64,7 +64,12 @@ public class AssistantController {
     @GetMapping("/topics")
     public TopicsSummaryResponse topics() {
         TopicsSummaryResponse response = assistantService.topics();
-        response.setRefreshing(topicJobService.isRunning());
+        boolean refreshing = topicJobService.isRunning();
+        if (!refreshing && response.isStale()
+                && (response.getTopics() == null || response.getTopics().isEmpty())) {
+            refreshing = topicJobService.start();
+        }
+        response.setRefreshing(refreshing);
         return response;
     }
 

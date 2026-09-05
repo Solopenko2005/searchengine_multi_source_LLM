@@ -21,6 +21,8 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class AssistantTopicCacheService {
+    private static final String CACHE_ALGORITHM_VERSION = "topic-analysis-v2";
+
     private final AssistantTopicCacheRepository repository;
     private final PageRepository pageRepository;
     private final CurrentUserService currentUserService;
@@ -31,7 +33,8 @@ public class AssistantTopicCacheService {
         List<Integer> sorted = new ArrayList<>(sourceIds == null ? List.of() : sourceIds);
         Collections.sort(sorted);
         PageRepository.ScopeRevision revision = sorted.isEmpty() ? null : pageRepository.scopeRevision(sorted);
-        String material = sorted + "|" + (profileInstructions == null ? "" : profileInstructions.trim())
+        String material = CACHE_ALGORITHM_VERSION + "|" + sorted + "|"
+                + (profileInstructions == null ? "" : profileInstructions.trim())
                 + "|" + llmClient.getConfiguredModel()
                 + "|" + (revision == null ? "0|0|0" : revision.getPageCount() + "|"
                 + revision.getMaxPageId() + "|" + revision.getSumPageIds());
@@ -48,6 +51,7 @@ public class AssistantTopicCacheService {
     @Transactional(readOnly = true)
     public Optional<TopicsSummaryResponse> readLatest() {
         return repository.findById(currentUserService.getUserId())
+                .filter(cache -> cacheModel().equals(cache.getModel()))
                 .flatMap(cache -> deserialize(cache, true));
     }
 
@@ -59,7 +63,7 @@ public class AssistantTopicCacheService {
             cache.setOwnerId(currentUserService.getUserId());
             cache.setScopeHash(scopeHash);
             cache.setPayload(objectMapper.writeValueAsString(response));
-            cache.setModel(llmClient.getConfiguredModel());
+            cache.setModel(cacheModel());
             cache.setUpdatedAt(LocalDateTime.now());
             repository.save(cache);
         } catch (Exception exception) {
@@ -77,6 +81,10 @@ public class AssistantTopicCacheService {
         } catch (Exception ignored) {
             return Optional.empty();
         }
+    }
+
+    private String cacheModel() {
+        return llmClient.getConfiguredModel() + "|" + CACHE_ALGORITHM_VERSION;
     }
 
     private String sha256(String value) {

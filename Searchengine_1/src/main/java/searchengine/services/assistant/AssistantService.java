@@ -164,11 +164,12 @@ public class AssistantService {
         Optional<TopicsSummaryResponse> current = topicCacheService.read(scopeHash);
         if (current.isPresent()) return current.get();
         Optional<TopicsSummaryResponse> latest = topicCacheService.readLatest();
-        if (latest.isPresent()) {
+        if (latest.isPresent() && isUsefulStaleAnalysis(latest.get())) {
             TopicsSummaryResponse stale = latest.get();
             stale.setStale(true);
             return stale;
         }
+        profileService.clearDetectedTopics();
         TopicsSummaryResponse pending = new TopicsSummaryResponse();
         pending.setResult(true);
         pending.setStale(true);
@@ -231,7 +232,6 @@ public class AssistantService {
             return response;
         }
 
-        if (items.isEmpty()) items.addAll(sourceTitleTopicItems(sourceIds));
         items.removeIf(item -> enhancedFilterService.isBoilerplateTitle(item.getTheme()));
         for (int index = 0; index < items.size(); index++) items.get(index).setRank(index + 1);
         response.setTopics(items);
@@ -300,19 +300,6 @@ public class AssistantService {
         return new StreamPreparation(question,
                 buildChatMessages(question, request.getHistory(), retrieved.docs, profile.getInstructions()),
                 sources, null, fallback, retrievalMs, retrieved.mode);
-    }
-
-    private List<TopicItem> sourceTitleTopicItems(List<Integer> sourceIds) {
-        List<TopicItem> result = new ArrayList<>();
-        int rank = 1;
-        for (Site site : siteRepository.findAllById(sourceIds)) {
-            String title = site.getName() == null || site.getName().isBlank() ? site.getUrl() : site.getName();
-            if (title == null || title.isBlank()) continue;
-            if (title.length() > 90) title = title.substring(0, 90) + "...";
-            result.add(new TopicItem(rank++, title, 1, 1, List.of(title)));
-            if (result.size() >= MAX_TOPICS) break;
-        }
-        return result;
     }
 
     /**
@@ -502,16 +489,22 @@ public class AssistantService {
 
         StringBuilder ctx = new StringBuilder();
         ctx.append("КОНТЕКСТ (фрагменты документов пользователя):\n\n");
+        boolean localProvider = llmClient.isLocalProvider();
+        int localTextChars = localProvider
+                ? Math.max(180, 3_600 / Math.max(1, docs.size()))
+                : Integer.MAX_VALUE;
         for (RetrievedDoc d : docs) {
             ctx.append("[").append(d.index).append("] ");
-            ctx.append("Название: ").append(d.title).append("\n");
+            ctx.append("Название: ").append(localProvider ? truncate(d.title, 120) : d.title).append("\n");
             if (d.source != null && !d.source.isBlank()) {
-                ctx.append("Источник: ").append(d.source).append("\n");
+                ctx.append("Источник: ")
+                        .append(localProvider ? truncate(d.source, 80) : d.source).append("\n");
             }
-            if (d.url != null && !d.url.isBlank()) {
+            if (!localProvider && d.url != null && !d.url.isBlank()) {
                 ctx.append("Ссылка: ").append(d.url).append("\n");
             }
-            ctx.append("Текст: ").append(d.content).append("\n\n");
+            ctx.append("Текст: ").append(localProvider ? truncate(d.content, localTextChars) : d.content)
+                    .append("\n\n");
         }
         ctx.append("ВОПРОС ПОЛЬЗОВАТЕЛЯ: ").append(question).append("\n\n");
         ctx.append("Дай развёрнутый ответ на русском языке. Подкрепи каждое существенное утверждение " +
@@ -564,7 +557,8 @@ public class AssistantService {
     }
 
     private List<ChatMessage> trimToInputBudget(List<ChatMessage> messages) {
-        int budget = Math.max(5000, config.getRag().getMaxInputChars());
+        int configuredBudget = Math.max(5000, config.getRag().getMaxInputChars());
+        int budget = llmClient.isLocalProvider() ? Math.min(configuredBudget, 9_000) : configuredBudget;
         if (messages.size() <= 2) return messages.stream()
                 .map(message -> new ChatMessage(message.getRole(), truncate(message.getContent(), budget / 2)))
                 .toList();
@@ -693,6 +687,12 @@ public class AssistantService {
             this.snippet = snippet;
             this.content = content;
         }
+    }
+
+    private boolean isUsefulStaleAnalysis(TopicsSummaryResponse response) {
+        if (response == null || response.getTopics() == null || response.getTopics().isEmpty()) return false;
+        return response.getTopics().stream().anyMatch(topic -> topic != null
+                && (topic.getConfidence() > 0 || topic.getFrequency() > 1 || topic.getMentions() > 1));
     }
 
     private static class RetrievedContext {

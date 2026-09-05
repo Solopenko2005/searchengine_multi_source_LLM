@@ -31,6 +31,10 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class LlmTopicAnalysisService {
 
+    private static final int LOCAL_DOCUMENT_LIMIT = 14;
+    private static final int LOCAL_EXCERPT_CHARS = 420;
+    private static final int LOCAL_DOCUMENTS_BUDGET = 7_000;
+
     private final LlmClient llmClient;
     private final AssistantConfig config;
     private final PageRepository pageRepository;
@@ -43,7 +47,9 @@ public class LlmTopicAnalysisService {
             return Optional.empty();
         }
 
-        int limit = Math.max(1, config.getRag().getTopicDocumentLimit());
+        int configuredLimit = Math.max(1, config.getRag().getTopicDocumentLimit());
+        boolean localProvider = llmClient.isLocalProvider();
+        int limit = localProvider ? Math.min(configuredLimit, LOCAL_DOCUMENT_LIMIT) : configuredLimit;
         List<Integer> selected = selectedSourceIds == null
                 ? List.of() : new ArrayList<>(new LinkedHashSet<>(selectedSourceIds));
         if (selected.isEmpty()) {
@@ -52,9 +58,9 @@ public class LlmTopicAnalysisService {
         Set<String> ownerIds = currentUserService.accessibleOwnerIds();
         boolean includeLegacy = currentUserService.isAdmin();
         List<SourceDocument> sourceDocuments = new ArrayList<>();
-        if (llmClient.isLocalProvider()) {
+        if (localProvider) {
             List<Long> representativeIds = chunkRepository.findRepresentativeReadyIds(
-                    selected, 8, Math.min(2000, Math.max(limit * 8, selected.size() * 8)));
+                    selected, 8, Math.min(1000, Math.max(limit * 8, selected.size() * 4)));
             if (!representativeIds.isEmpty()) {
                 Map<Long, AssistantChunk> chunksById = chunkRepository.findReadyWithPageByIds(
                                 representativeIds, AssistantChunkStatus.READY).stream()
@@ -85,19 +91,26 @@ public class LlmTopicAnalysisService {
         StringBuilder documents = new StringBuilder();
         Map<Integer, Page> byIndex = new LinkedHashMap<>();
         int index = 1;
+        int documentsBudget = localProvider
+                ? LOCAL_DOCUMENTS_BUDGET
+                : Math.max(12_000, config.getRag().getMaxInputChars() - 8_000);
         for (SourceDocument sourceDocument : sourceDocuments) {
             Page page = sourceDocument.page();
-            byIndex.put(index, page);
             String title = page.getOriginalFileName();
             if (title == null || title.isBlank()) {
-                title = Jsoup.parse(page.getContent()).title();
+                title = Jsoup.parse(page.getContent() == null ? "" : page.getContent()).title();
             }
             if (title == null || title.isBlank()) {
                 title = page.getPath();
             }
+            title = truncate(title == null ? "Документ " + index : title, 140);
             String text = sourceDocument.text();
-            int excerptLimit = llmClient.isLocalProvider() ? 900 : 1800;
-            text = text.length() > excerptLimit ? text.substring(0, excerptLimit) : text;
+            int excerptLimit = localProvider ? LOCAL_EXCERPT_CHARS : 1800;
+            int blockOverhead = title.length() + 80;
+            int remaining = documentsBudget - documents.length() - blockOverhead;
+            if (remaining < 160) break;
+            text = truncate(text, Math.min(excerptLimit, remaining));
+            byIndex.put(index, page);
             documents.append("<document id=\"D").append(index).append("\">\n")
                     .append("Название: ").append(title).append("\n")
                     .append("Текст: ").append(text).append("\n")
@@ -199,15 +212,27 @@ public class LlmTopicAnalysisService {
         bySite.values().forEach(values -> values.sort(quality));
 
         List<AssistantChunk> result = new ArrayList<>();
-        // Round-robin preserves coverage of the whole workspace instead of letting
-        // one large journal or website dominate the topic prompt.
+        // Compare the best research fragment from every source before allowing a
+        // second fragment from the same source. This keeps source diversity while
+        // avoiding the old bias towards sources with the smallest database ids.
         for (int round = 0; round < 2 && result.size() < limit; round++) {
+            List<AssistantChunk> roundCandidates = new ArrayList<>();
             for (List<AssistantChunk> values : bySite.values()) {
-                if (values.size() > round) result.add(values.get(round));
+                if (values.size() > round) roundCandidates.add(values.get(round));
+            }
+            roundCandidates.sort(quality);
+            for (AssistantChunk candidate : roundCandidates) {
+                result.add(candidate);
                 if (result.size() >= limit) break;
             }
         }
         return result;
+    }
+
+    private String truncate(String value, int maxChars) {
+        if (value == null) return "";
+        if (value.length() <= maxChars) return value;
+        return value.substring(0, Math.max(1, maxChars - 1)) + "…";
     }
 
     private int topicSignalScore(AssistantChunk chunk) {

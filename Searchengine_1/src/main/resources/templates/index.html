@@ -841,7 +841,14 @@ p.error-browser
     }
 
     function loadTopics() {
-        return fetch(API + '/assistant/topics').then(function (r) { return r.json(); }).then(renderTopics);
+        return fetch(API + '/assistant/topics').then(function (r) { return r.json(); }).then(function (data) {
+            renderTopics(data);
+            if (data && data.refreshing) {
+                topicsBtn.disabled = true;
+                window.setTimeout(waitForTopics, 600);
+            }
+            return data;
+        });
     }
 
     function waitForTopics() {
