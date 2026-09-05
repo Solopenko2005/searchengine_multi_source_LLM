@@ -35,9 +35,11 @@ sudo ufw allow OpenSSH
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw allow 443/udp
+sudo ufw allow from 172.28.0.0/24 to any port 1234 proto tcp comment 'Scientific Search LLM bridge'
 sudo ufw enable
 ```
 
+Правило для 1234 разрешает доступ только из закреплённой внутренней Docker-подсети.
 Порт 1234, PostgreSQL, Redis, 5555, 8771 и 8080 открывать в интернет нельзя.
 
 ## 2. Конфигурация
@@ -86,6 +88,12 @@ lms server start --port 1234 --bind 0.0.0.0
 публичный доступ к 1234. Для постоянной работы используйте готовую systemd-службу
 `deploy/systemd/lmstudio.service`, подготовленную по официальной инструкции LM Studio.
 
+```bash
+sudo install -m 0644 deploy/systemd/lmstudio.service /etc/systemd/system/lmstudio.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now lmstudio
+```
+
 ## 4. Запуск и проверка
 
 ```bash
@@ -100,6 +108,7 @@ docker compose --env-file .env.production logs --tail=200 search authorization e
 ```bash
 curl -fsS http://localhost:1234/v1/models
 curl -I "https://${APP_HOST}/"
+deploy/scripts/verify-production.sh
 ```
 
 После первого запуска проверьте регистрацию посетителя, подтверждение

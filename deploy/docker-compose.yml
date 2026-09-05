@@ -145,6 +145,9 @@ services:
 networks:
   backend:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
 
 volumes:
   postgres18_data:

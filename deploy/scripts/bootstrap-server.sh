@@ -62,7 +62,7 @@ fi
 cat > /etc/ssh/sshd_config.d/99-scientific-search.conf <<'EOF'
 PasswordAuthentication no
 KbdInteractiveAuthentication no
-PermitRootLogin prohibit-password
+PermitRootLogin no
 EOF
 sshd -t
 systemctl reload ssh
@@ -73,6 +73,7 @@ ufw allow OpenSSH
 ufw allow 80/tcp
 ufw allow 443/tcp
 ufw allow 443/udp
+ufw allow from 172.28.0.0/24 to any port 1234 proto tcp comment 'Scientific Search LLM bridge'
 ufw --force enable
 
 echo "Server bootstrap completed."
