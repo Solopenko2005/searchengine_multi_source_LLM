@@ -112,6 +112,15 @@ class LlmClientTest {
     }
 
     @Test
+    void dockerHostLmStudioEndpointIsRecognizedAsLocal() {
+        AssistantConfig config = new AssistantConfig();
+        config.getLlm().setBaseUrl("http://host.docker.internal:1234/v1");
+        LlmClient client = new LlmClient(config, new ObjectMapper(), WebClient.builder());
+
+        assertThat(client.isLocalProvider()).isTrue();
+    }
+
+    @Test
     void streamsResponsesApiTextDeltas() throws Exception {
         server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/responses", exchange -> {

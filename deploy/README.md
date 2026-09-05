@@ -88,6 +88,11 @@ lms server start --port 1234 --bind 0.0.0.0
 публичный доступ к 1234. Для постоянной работы используйте готовую systemd-службу
 `deploy/systemd/lmstudio.service`, подготовленную по официальной инструкции LM Studio.
 
+Для CPU-сервера производственная конфигурация ограничивает один запрос ассистента
+шестью наиболее релевантными фрагментами и 14 000 символами контекста. Лимиты и
+тайм-аут можно изменить через `ASSISTANT_RAG_*` и `OPENAI_TIMEOUT_SECONDS`, не
+пересобирая приложение.
+
 ```bash
 sudo install -m 0644 deploy/systemd/lmstudio.service /etc/systemd/system/lmstudio.service
 sudo systemctl daemon-reload

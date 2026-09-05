@@ -6,6 +6,7 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import lombok.extern.slf4j.Slf4j;
 import searchengine.dto.assistant.ChatRequest;
 
 import java.io.IOException;
@@ -16,7 +17,9 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.FutureTask;
 
 @Service
+@Slf4j
 public class AssistantStreamingService {
+    private static final long STREAM_TIMEOUT_MILLIS = 185_000L;
     private final AssistantService assistantService;
     private final LlmClient llmClient;
     private final AssistantMetricsService metricsService;
@@ -35,7 +38,7 @@ public class AssistantStreamingService {
     public SseEmitter stream(ChatRequest request) {
         String requestId = validRequestId(request == null ? null : request.getRequestId());
         if (request != null) request.setRequestId(requestId);
-        SseEmitter emitter = new SseEmitter(125_000L);
+        SseEmitter emitter = new SseEmitter(STREAM_TIMEOUT_MILLIS);
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         String ownerId = authentication == null ? "" : authentication.getName();
         FutureTask<Void> task = new FutureTask<>(() -> {
@@ -92,6 +95,8 @@ public class AssistantStreamingService {
                 return;
             }
             failed = true;
+            log.warn("Потоковый запрос LLM {} завершился ошибкой: {}",
+                    requestId, safeMessage(exception), exception);
             if (preparation != null && preparation.getFallbackAnswer() != null) {
                 safeSend(emitter, "delta", Map.of("text", preparation.getFallbackAnswer()));
             }

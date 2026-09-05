@@ -14,12 +14,12 @@ echo "== Public HTTPS =="
 curl --fail --silent --show-error --location --max-time 20 \
   --output /dev/null --write-out 'HTTP %{http_code}\n' "${PUBLIC_URL}/"
 
-echo "== LLM chat =="
+echo "== LLM responses =="
 curl --fail --silent --show-error --max-time 180 \
   --header 'Content-Type: application/json' \
-  --data-binary @- http://127.0.0.1:1234/v1/chat/completions <<'JSON' \
-  | python3 -c 'import json,sys; data=json.load(sys.stdin); print(data["choices"][0]["message"]["content"].strip())'
-{"model":"local-qwen3-8b","messages":[{"role":"user","content":"/no_think Ответьте только одним словом: работает"}],"temperature":0,"max_tokens":16}
+  --data-binary @- http://127.0.0.1:1234/v1/responses <<'JSON' \
+  | python3 -c 'import json,sys; data=json.load(sys.stdin); print(data["output"][0]["content"][0]["text"].strip())'
+{"model":"local-qwen3-8b","store":false,"max_output_tokens":32,"input":[{"role":"user","content":"/no_think\nОтветьте только одним словом: работает"}],"text":{"format":{"type":"text"}}}
 JSON
 
 echo "== Embeddings =="

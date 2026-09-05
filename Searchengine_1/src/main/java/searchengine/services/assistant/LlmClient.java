@@ -186,7 +186,8 @@ public class LlmClient {
             String host = URI.create(baseUrl).getHost();
             return "localhost".equalsIgnoreCase(host)
                     || "127.0.0.1".equals(host)
-                    || "::1".equals(host);
+                    || "::1".equals(host)
+                    || "host.docker.internal".equalsIgnoreCase(host);
         } catch (RuntimeException ignored) {
             return false;
         }
