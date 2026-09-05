@@ -13,6 +13,7 @@ logs/
 **/logs/
 Searchengine_1/data/
 deploy/backups/
+deploy/.ssh/
 **/target/
 **/*.log
 **/hs_err_pid*.log

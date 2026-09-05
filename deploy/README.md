@@ -7,7 +7,7 @@
 ## Рекомендуемый пилотный сервер
 
 - Ubuntu 24.04 LTS;
-- 8 vCPU, 16 ГБ RAM и не менее 100 ГБ NVMe;
+- 8 vCPU, 12 ГБ RAM, 6 ГБ swap и не менее 100 ГБ NVMe;
 - публичный IPv4 и домен с A-записью на этот адрес;
 - открыты только SSH, 80/tcp и 443/tcp+udp;
 - ежедневный снимок диска либо выгрузка PostgreSQL в отдельное хранилище.
@@ -19,8 +19,14 @@
 
 ## 1. Настройка сервера
 
-Установите Docker Engine с Compose Plugin по официальной инструкции провайдера.
-Добавьте пользователя развёртывания в группу `docker`. Настройте firewall:
+Первичную настройку можно выполнить подготовленным сценарием от `root`:
+
+```bash
+sudo bash deploy/scripts/bootstrap-server.sh
+```
+
+Он создаёт пользователя `scientific`, устанавливает Docker Engine с Compose
+Plugin, добавляет 6 ГБ swap и настраивает firewall. Эквивалентные правила firewall:
 
 ```bash
 sudo ufw default deny incoming
