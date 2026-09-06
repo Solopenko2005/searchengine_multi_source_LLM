@@ -68,7 +68,7 @@ public class AssistantService {
     private final AssistantMetricsService metricsService;
     private final AssistantTopicCacheService topicCacheService;
 
-    private static final int MAX_TOPICS = 20;
+    private static final int MAX_TOPICS = 8;
 
     /**
      * Обрабатывает вопрос пользователя к его документам.
@@ -222,7 +222,10 @@ public class AssistantService {
                 if (theme.length() > 90) theme = theme.substring(0, 90) + "...";
                 int frequency = summary.getFrequency() == null ? 0 : summary.getFrequency().intValue();
                 int mentions = summary.getMentions() == null ? 0 : summary.getMentions().intValue();
-                items.add(new TopicItem(rank++, theme, frequency, mentions, List.of()));
+                // Legacy headings are only a conservative fallback. Repetition on hundreds of
+                // pages from one domain is navigation noise, not evidence of a popular topic.
+                if (mentions < 2 || frequency > Math.max(25, mentions * 15)) continue;
+                items.add(new TopicItem(rank++, theme, mentions, mentions, List.of()));
                 if (items.size() >= MAX_TOPICS) break;
             }
         } catch (Exception e) {
@@ -244,19 +247,10 @@ public class AssistantService {
             return cacheTopics(scopeHash, response);
         }
 
-        if (llmClient.isConfigured()) {
-            try {
-                response.setSummary(llmClient.complete(buildTopicsMessages(items)));
-                response.setUsedLlm(true);
-            } catch (Exception e) {
-                logger.warn("LLM недоступна для обзора тем: {}", e.getMessage());
-                response.setUsedLlm(false);
-                response.setSummary(fallbackTopicsSummary(items));
-            }
-        } else {
-            response.setUsedLlm(false);
-            response.setSummary(fallbackTopicsSummary(items));
-        }
+        // Do not put an LLM badge on a summary of legacy HTML headings. Only the
+        // source-balanced semantic path above is considered an LLM topic analysis.
+        response.setUsedLlm(false);
+        response.setSummary(fallbackTopicsSummary(items));
         response.setResult(true);
         profileService.saveDetectedTopics(items);
         return cacheTopics(scopeHash, response);
@@ -647,9 +641,8 @@ public class AssistantService {
                 .map(TopicItem::getTheme)
                 .filter(t -> t != null && !t.isBlank())
                 .collect(Collectors.joining(", "));
-        return "Наиболее популярные тематики по загруженным документам: " + list + ". "
-                + "Для связного текстового обзора подключите языковую модель "
-                + "(assistant.llm.api-key в application.yml).";
+        return "Семантический LLM-анализ временно не завершён. После удаления меню и служебных "
+                + "заголовков между несколькими источниками повторяются направления: " + list + ".";
     }
 
     private String buildUrl(String siteUrl, String uri) {

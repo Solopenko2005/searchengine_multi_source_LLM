@@ -21,7 +21,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class AssistantTopicCacheService {
-    private static final String CACHE_ALGORITHM_VERSION = "topic-analysis-v2";
+    private static final String CACHE_ALGORITHM_VERSION = "topic-analysis-v3-source-balanced";
 
     private final AssistantTopicCacheRepository repository;
     private final PageRepository pageRepository;

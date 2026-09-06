@@ -13,14 +13,17 @@ import searchengine.model.Site;
 import searchengine.model.SourceType;
 import searchengine.repository.PageRepository;
 import searchengine.repository.AssistantChunkRepository;
+import searchengine.repository.SiteRepository;
 import searchengine.repository.WorkspaceMembershipRepository;
 import searchengine.services.CurrentUserService;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -43,24 +46,27 @@ class LlmTopicAnalysisServiceTest {
         when(client.isConfigured()).thenReturn(true);
         when(client.completeJson(any(), anyString(), any())).thenReturn("""
                 {"summary":"Обзор","topics":[
-                  {"theme":"Селекция","description":"Методы отбора","confidence":0.92,"documentIndexes":[1]},
+                  {"theme":"Селекция растений","description":"Методы отбора","confidence":0.92,"documentIndexes":[1]},
+                  {"theme":"Войти Регистрация Научные статьи Журналы","description":"Меню","confidence":0.99,"documentIndexes":[1]},
                   {"theme":"Случайная тема","description":"Слабое основание","confidence":0.30,"documentIndexes":[1]}
                 ]}
                 """);
 
         PageRepository pages = mock(PageRepository.class);
-        when(pages.findRecentAccessibleBySiteIds(any(), any(), any(Boolean.class), any()))
-                .thenReturn(List.of(document()));
+        Page document = document();
+        when(pages.findBySiteAndPath(anyInt(), anyString())).thenReturn(Optional.of(document));
+        SiteRepository sites = mock(SiteRepository.class);
+        when(sites.findAllById(any())).thenReturn(List.of(document.getSite()));
         AssistantConfig config = new AssistantConfig();
         config.getRag().setTopicMinConfidence(0.65);
-        LlmTopicAnalysisService service = new LlmTopicAnalysisService(client, config, pages,
+        LlmTopicAnalysisService service = new LlmTopicAnalysisService(client, config, pages, sites,
                 new ObjectMapper(), new CurrentUserService(mock(WorkspaceMembershipRepository.class)),
                 mock(AssistantChunkRepository.class));
 
         LlmTopicAnalysisService.Analysis analysis = service.analyze(List.of(10), "Агрономия")
                 .orElseThrow();
         assertThat(analysis.getTopics()).hasSize(1);
-        assertThat(analysis.getTopics().get(0).getTheme()).isEqualTo("Селекция");
+        assertThat(analysis.getTopics().get(0).getTheme()).isEqualTo("Селекция растений");
         assertThat(analysis.getTopics().get(0).getConfidence()).isEqualTo(0.92);
     }
 
@@ -77,16 +83,19 @@ class LlmTopicAnalysisServiceTest {
                 ]}
                 """);
         AssistantChunkRepository chunks = mock(AssistantChunkRepository.class);
-        when(chunks.findRepresentativeReadyIds(any(), any(Integer.class), any(Integer.class)))
-                .thenReturn(List.of(1L, 2L));
         AssistantChunk metadata = chunk(1L, "ISSN 1234. Для цитирования. Свидетельство о регистрации издания.");
         AssistantChunk research = chunk(2L, "Цель исследования: оценить методы селекции пшеницы. " +
                 "Материалы и методы включали полевой эксперимент. Результаты показали устойчивость сортов.");
-        when(chunks.findReadyWithPageByIds(any(), any(AssistantChunkStatus.class)))
+        when(chunks.findByPageIdsWithPage(any(), any(AssistantChunkStatus.class)))
                 .thenReturn(List.of(metadata, research));
+        PageRepository pages = mock(PageRepository.class);
+        Page document = document();
+        when(pages.findBySiteAndPath(anyInt(), anyString())).thenReturn(Optional.of(document));
+        SiteRepository sites = mock(SiteRepository.class);
+        when(sites.findAllById(any())).thenReturn(List.of(document.getSite()));
         AssistantConfig config = new AssistantConfig();
         config.getRag().setTopicDocumentLimit(1);
-        LlmTopicAnalysisService service = new LlmTopicAnalysisService(client, config, mock(PageRepository.class),
+        LlmTopicAnalysisService service = new LlmTopicAnalysisService(client, config, pages, sites,
                 new ObjectMapper(), new CurrentUserService(mock(WorkspaceMembershipRepository.class)), chunks);
 
         service.analyze(List.of(10), "Агрономия").orElseThrow();
@@ -110,42 +119,51 @@ class LlmTopicAnalysisServiceTest {
                   {"theme":"Машинное обучение","description":"Методы анализа","confidence":0.9,"documentIndexes":[1]}
                 ]}
                 """);
-        AssistantChunkRepository chunks = mock(AssistantChunkRepository.class);
         List<Long> ids = LongStream.rangeClosed(1, 40).boxed().toList();
-        when(chunks.findRepresentativeReadyIds(any(), any(Integer.class), any(Integer.class)))
-                .thenReturn(ids);
-        List<AssistantChunk> candidates = ids.stream()
-                .map(id -> chunk(id, id.intValue(), "Цель исследования и методы машинного обучения. ".repeat(40)))
+        List<Site> sourceSites = ids.stream()
+                .map(id -> site(id.intValue(), "Исследование машинного обучения, источник " + id))
                 .toList();
-        when(chunks.findReadyWithPageByIds(any(), any(AssistantChunkStatus.class)))
-                .thenReturn(candidates);
+        SiteRepository sites = mock(SiteRepository.class);
+        when(sites.findAllById(any())).thenReturn(sourceSites);
         AssistantConfig config = new AssistantConfig();
         config.getRag().setTopicDocumentLimit(80);
         LlmTopicAnalysisService service = new LlmTopicAnalysisService(client, config, mock(PageRepository.class),
-                new ObjectMapper(), new CurrentUserService(mock(WorkspaceMembershipRepository.class)), chunks);
+                sites, new ObjectMapper(), new CurrentUserService(mock(WorkspaceMembershipRepository.class)),
+                mock(AssistantChunkRepository.class));
 
         service.analyze(ids.stream().map(Long::intValue).toList(), "Анализ научных исследований").orElseThrow();
 
         ArgumentCaptor<List<ChatMessage>> messages = ArgumentCaptor.forClass(List.class);
         verify(client).completeJson(messages.capture(), anyString(), any());
         String prompt = messages.getValue().get(1).getContent();
-        assertThat(prompt.length()).isLessThan(2_500);
-        assertThat(prompt).contains("document id=\"D5\"");
-        assertThat(prompt).doesNotContain("document id=\"D6\"");
+        assertThat(prompt.length()).isLessThan(10_000);
+        assertThat(prompt).contains("S1 | веб-источник", "S40 | веб-источник");
     }
 
     private Page document() {
         Site site = new Site();
         site.setId(10);
         site.setName("Мои документы");
+        site.setUrl("local://document/selection");
         site.setSourceType(SourceType.DOCUMENT);
         Page page = new Page();
         page.setId(1);
         page.setSite(site);
         page.setOwnerId("alice");
         page.setOriginalFileName("selection.pdf");
+        page.setPath("/selection");
+        page.setCode(200);
         page.setContent("<html><body>Методы селекции и отбора растений</body></html>");
         return page;
+    }
+
+    private Site site(int id, String name) {
+        Site site = new Site();
+        site.setId(id);
+        site.setName(name);
+        site.setUrl("https://example.org/source-" + id);
+        site.setSourceType(SourceType.WEBSITE);
+        return site;
     }
 
     private AssistantChunk chunk(long id, String content) {

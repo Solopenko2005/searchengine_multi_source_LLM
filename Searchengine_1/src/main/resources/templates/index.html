@@ -832,7 +832,7 @@ p.error-browser
             data.topics.forEach(function (t) {
                 var confidence = t.confidence ? (tr(' · уверенность ', ' · confidence ') + Math.round(t.confidence * 100) + '%') : '';
                 html += '<li><span class="theme">' + t.rank + '. ' + esc(t.theme) + '</span>' +
-                    '<span class="meta">' + tr('частота ', 'frequency ') + t.frequency + tr(' · источников ', ' · sources ') + t.mentions + confidence + '</span></li>';
+                    '<span class="meta">' + tr('подтверждено источниками: ', 'confirmed by sources: ') + t.mentions + confidence + '</span></li>';
                 if (t.description) html += '<li><span>' + esc(t.description) + '</span></li>';
             });
             html += '</ul>';

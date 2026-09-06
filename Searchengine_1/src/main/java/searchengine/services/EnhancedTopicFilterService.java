@@ -63,6 +63,18 @@ public class EnhancedTopicFilterService {
         add("for citation");
         add("полный текст");
         add("full text");
+        add("войти регистрация");
+        add("sign in registration");
+        add("научные статьи журналы издательства подписки");
+        add("understand your visitors with statcounter");
+        add("subscribe to global stats");
+        add("view all stats");
+        add("публикации по теме");
+        add("новости по теме");
+        add("расскажите нам о своем продукте");
+        add("станьте частью закрытого клуба");
+        add("dsa practice problems");
+        add("question ");
     }};
 
     private static final Set<String> STOP_KEYWORDS = new HashSet<>() {{
@@ -132,11 +144,28 @@ public class EnhancedTopicFilterService {
     public boolean isBoilerplateTitle(String value) {
         String title = normalize(value);
         if (title.isBlank()) return true;
+        if (title.matches(".*(https?://|www\\.|@|\\+?\\d[\\d ()-]{7,}).*")) return true;
+        if (EXACT_STOP_TITLES.contains(title)) return true;
         for (String stopTitle : STOP_TITLES) {
             if (title.contains(normalize(stopTitle))) return true;
         }
+        String[] words = title.split("\\s+");
+        int navigationWords = 0;
+        for (String word : words) {
+            if (NAVIGATION_WORDS.contains(word)) navigationWords++;
+        }
+        if (navigationWords >= 3) return true;
         return false;
     }
+
+    private static final Set<String> NAVIGATION_WORDS = Set.of(
+            "войти", "регистрация", "подписки", "меню", "обновить", "главная",
+            "статьи", "журналы", "издательства", "реклама", "новости", "автор",
+            "login", "registration", "subscribe", "view", "explore", "comment",
+            "courses", "problems", "publishers", "journals");
+
+    private static final Set<String> EXACT_STOP_TITLES = Set.of(
+            "обновить", "refresh", "заключение", "автор", "period", "explore", "comment");
 
     private String normalize(String value) {
         if (value == null) return "";
