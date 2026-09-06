@@ -99,6 +99,8 @@ services:
       SECURITY_MODE: basic
       AUTH_SERVICE_ENABLED: "true"
       AUTH_SERVICE_URL: http://authorization:5555
+      AUTH_OPENAPI_URL: http://authorization:5555/v3/api-docs
+      EMAIL_OPENAPI_URL: http://email:8771/v3/api-docs
       CORS_ALLOWED_ORIGINS: ${APP_PUBLIC_URL}
       SERVER_FORWARD_HEADERS_STRATEGY: framework
       SERVER_SERVLET_SESSION_COOKIE_SECURE: "true"

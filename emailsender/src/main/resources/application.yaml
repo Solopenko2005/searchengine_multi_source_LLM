@@ -1,6 +1,11 @@
 server:
   port: ${SENDER_PORT:8771}
 
+springdoc:
+  paths-to-match: /api/**
+  swagger-ui:
+    enabled: false
+
 spring:
   application:
     name: email_sender

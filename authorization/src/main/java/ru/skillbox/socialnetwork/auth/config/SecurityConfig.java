@@ -30,7 +30,11 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth ->
-                        auth.requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/captcha", "/api/v1/auth/password/recovery", "/api/v1/auth/password/recovery/**", "/api/v1/auth/admin/verify").permitAll()
+                        auth.requestMatchers("/v3/api-docs", "/v3/api-docs/**",
+                                        "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh",
+                                        "/api/v1/auth/captcha", "/api/v1/auth/password/recovery",
+                                        "/api/v1/auth/password/recovery/**", "/api/v1/auth/admin/verify")
+                                .permitAll()
                 .anyRequest().authenticated())
                 .sessionManagement(httpSecuritySessionManagementConfigurer ->
                         httpSecuritySessionManagementConfigurer.sessionCreationPolicy(SessionCreationPolicy.STATELESS));

@@ -1,5 +1,7 @@
 package ru.skillbox.socialnetwork.auth.controller;
 
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,6 +19,7 @@ import ru.skillbox.socialnetwork.auth.service.RecoveryService;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/auth")
+@Tag(name = "Авторизация", description = "Регистрация, JWT, подтверждение администратора и восстановление доступа")
 public class AuthController {
     private final AuthService authService;
     private final CaptchaService captchaService;
@@ -49,6 +52,7 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
+    @SecurityRequirement(name = "bearerAuth")
     public void logout(@AuthenticationPrincipal UserDetails user) {
         authService.logout(user);
     }
@@ -59,18 +63,21 @@ public class AuthController {
     }
 
     @PostMapping("/change-password-link")
+    @SecurityRequirement(name = "bearerAuth")
     public void changePasswordLink(@AuthenticationPrincipal UserDetails user,
                                    @RequestBody ChangePasswordRequest changePasswordRequest) {
         recoveryService.changePasswordLink(changePasswordRequest, user.getUsername());
     }
 
     @PostMapping("/change-email-link")
+    @SecurityRequirement(name = "bearerAuth")
     public void changeEmailLink(@AuthenticationPrincipal UserDetails user,
             @RequestBody ChangeEmailRequest changeEmailRequest) {
         recoveryService.changeEmailLink(changeEmailRequest, user.getUsername());
     }
 
     @GetMapping("/validate")
+    @SecurityRequirement(name = "bearerAuth")
     public Boolean validate(@RequestHeader("Authorization") String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return false;

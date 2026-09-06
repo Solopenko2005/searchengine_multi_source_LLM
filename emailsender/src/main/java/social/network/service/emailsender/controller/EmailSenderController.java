@@ -1,5 +1,6 @@
 package social.network.service.emailsender.controller;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,6 +12,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/email")
+@Tag(name = "E-mail", description = "Внутренние операции SMTP-сервиса")
 public class EmailSenderController {
     private final DefaultEmailService emailService;
 

@@ -68,3 +68,8 @@ app:
 
 server:
   port: ${AUTH_SERVER_PORT:5555}
+
+springdoc:
+  paths-to-match: /api/**
+  swagger-ui:
+    enabled: false

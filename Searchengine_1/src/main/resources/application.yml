@@ -1,6 +1,28 @@
 server:
   port: 8080
 
+springdoc:
+  paths-to-match: /api/**
+  swagger-ui:
+    path: /api-docs
+    disable-swagger-default-url: true
+    display-request-duration: true
+    doc-expansion: none
+    filter: true
+    persist-authorization: true
+    operations-sorter: method
+    tags-sorter: alpha
+    csrf:
+      enabled: true
+    urls-primary-name: "1. Поисковая система"
+    urls:
+      - name: "1. Поисковая система"
+        url: /v3/api-docs
+      - name: "2. Авторизация"
+        url: /api/admin/openapi/authorization
+      - name: "3. Отправка e-mail (внутренний модуль)"
+        url: /api/admin/openapi/email
+
 logging:
   level:
     org.hibernate.SQL: WARN
@@ -87,6 +109,9 @@ assistant:
     index-path: ${ASSISTANT_VECTOR_INDEX_PATH:data/assistant-vectors}
 
 app:
+  docs:
+    authorization-url: ${AUTH_OPENAPI_URL:http://localhost:5555/v3/api-docs}
+    email-url: ${EMAIL_OPENAPI_URL:http://localhost:8771/v3/api-docs}
   security:
     # basic — локальная разработка; jwt — интеграция с внешним сервисом авторизации.
     mode: ${SECURITY_MODE:basic}

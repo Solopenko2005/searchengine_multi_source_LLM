@@ -74,6 +74,8 @@ html, body.Site { width: 100%; height: 100%; overflow: hidden; }
 .ProfileDrawer-header > button { color: var(--index-primary); background: transparent; border: 0; cursor: pointer; font-size: 30px; line-height: 1; }
 .ProfileDrawer-summary { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin: 20px 0; }
 .ProfileDrawer-summary span { padding: 11px 6px; background: rgba(159,186,241,.18); border-radius: 11px; font-size: 9px; text-align: center; }.ProfileDrawer-summary strong { display: block; margin-bottom: 3px; color: var(--index-primary); font-size: 17px; }
+.ProfileDrawer-api { display: block; margin-top: 18px; padding: 11px; color: var(--index-primary); background: rgba(159,186,241,.2); border: 1px solid rgba(61,86,143,.35); border-radius: 10px; font: 600 10px Montserrat,Arial,sans-serif; text-align: center; text-decoration: none; }
+.ProfileDrawer-api:hover { color: #fff; background: var(--index-primary); }
 .MySources, .ProfileGroups { margin-top: 12px; }.MySources h3, .ProfileGroups h3 { margin: 0 0 10px; color: var(--index-primary); font-size: 14px; }
 .MySources-tools { display: flex; gap: 5px; }.MySources-tools button, .Assistant-scopeHead button { padding: 5px 8px; color: var(--index-primary); background: transparent; border: 1px solid rgba(61,86,143,.3); border-radius: 7px; cursor: pointer; font: 600 8px Montserrat,Arial,sans-serif; }.MySources-tools button:last-child { color: #a52b2b; border-color: rgba(228,71,71,.35); }.MySources-tools button:disabled { cursor: default; opacity: .4; }
 .MySources-list { display: grid; gap: 7px; max-height: 44vh; overflow-y: auto; }

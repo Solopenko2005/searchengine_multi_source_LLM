@@ -9,7 +9,23 @@
         -Server
     }
 
-    reverse_proxy search:8080
+    # The combined Swagger UI is protected by the search application. Do not
+    # expose the authorization service's raw specification through its public
+    # executable prefix.
+    @authorizationDocs path /auth-api/v3/api-docs*
+    respond @authorizationDocs 404
+
+    # Public authentication API used by Swagger UI. Protected operations still
+    # require the JWT enforced by the authorization service.
+    handle_path /auth-api/* {
+        reverse_proxy authorization:5555
+    }
+
+    # The e-mail sender deliberately has no public route. Its specification is
+    # proxied through the administrator-only search application.
+    handle {
+        reverse_proxy search:8080
+    }
 
     log {
         output stdout

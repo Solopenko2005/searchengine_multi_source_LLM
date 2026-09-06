@@ -52,6 +52,8 @@ public final class SecurityConfig {
         http.authorizeRequests(authorize -> authorize
                 .antMatchers("/", "/privacy", "/login", "/register", "/forgot-password", "/password-reset", "/admin-verification",
                         "/assets/**", "/error").permitAll()
+                .antMatchers("/api-docs", "/api-docs/**", "/swagger-ui.html", "/swagger-ui/**",
+                        "/v3/api-docs", "/v3/api-docs/**").hasRole("ADMIN")
                 .antMatchers(HttpMethod.GET, "/app", "/api/statistics", "/api/search",
                         "/api/assistant/**", "/api/documents/**", "/documents/**",
                         "/api/me", "/api/sources", "/api/groups", "/api/groups/invitations/**",

@@ -51,7 +51,8 @@
             'library.catalog': 'Scientific publications catalogue', 'library.find': 'Find articles',
             'library.recommendations': 'Recommended from your documents',
             'library.recommendations.lead': 'The system detects the dominant topic in uploaded documents and suggests related research.',
-            'sources.mine': 'My sources', 'profile.logout': 'Sign out'
+            'sources.mine': 'My sources', 'profile.api': 'API documentation (Swagger)',
+            'profile.logout': 'Sign out'
         },
         ru: {}
     };
