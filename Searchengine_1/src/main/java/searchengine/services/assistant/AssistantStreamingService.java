@@ -15,6 +15,9 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -25,17 +28,21 @@ public class AssistantStreamingService {
     private final AssistantMetricsService metricsService;
     private final EmbeddingIndexCoordinator embeddingIndexCoordinator;
     private final Executor executor;
+    private final ScheduledExecutorService heartbeatScheduler;
     private final Map<String, ActiveRequest> active = new ConcurrentHashMap<>();
 
     public AssistantStreamingService(AssistantService assistantService, LlmClient llmClient,
                                      AssistantMetricsService metricsService,
                                      EmbeddingIndexCoordinator embeddingIndexCoordinator,
-                                     @Qualifier("assistantRequestExecutor") Executor executor) {
+                                     @Qualifier("assistantRequestExecutor") Executor executor,
+                                     @Qualifier("assistantHeartbeatScheduler")
+                                     ScheduledExecutorService heartbeatScheduler) {
         this.assistantService = assistantService;
         this.llmClient = llmClient;
         this.metricsService = metricsService;
         this.embeddingIndexCoordinator = embeddingIndexCoordinator;
         this.executor = executor;
+        this.heartbeatScheduler = heartbeatScheduler;
     }
 
     public SseEmitter stream(ChatRequest request) {
@@ -49,7 +56,10 @@ public class AssistantStreamingService {
             execute(requestId, request, authentication, emitter);
             return null;
         });
-        active.put(requestId, new ActiveRequest(requestId, task, ownerId, emitter));
+        ActiveRequest activeRequest = new ActiveRequest(requestId, task, ownerId, emitter);
+        active.put(requestId, activeRequest);
+        activeRequest.heartbeat = heartbeatScheduler.scheduleAtFixedRate(
+                () -> heartbeat(requestId, emitter), 10, 10, TimeUnit.SECONDS);
         emitter.onCompletion(() -> remove(requestId, false));
         emitter.onTimeout(() -> remove(requestId, true));
         emitter.onError(error -> remove(requestId, true));
@@ -109,7 +119,8 @@ public class AssistantStreamingService {
         } finally {
             long retrievalMs = preparation == null ? 0 : preparation.getRetrievalMs();
             metricsService.record(retrievalMs, generationMs, elapsedMillis(startedAt), failed);
-            active.remove(requestId);
+            ActiveRequest finished = active.remove(requestId);
+            if (finished != null) finished.cancelHeartbeat();
             try { emitter.complete(); } catch (Exception ignored) { }
             embeddingIndexCoordinator.endInteractiveRequest();
             SecurityContextHolder.clearContext();
@@ -144,6 +155,7 @@ public class AssistantStreamingService {
     }
 
     private boolean cancelRequest(ActiveRequest request, boolean notifyClient) {
+        request.cancelHeartbeat();
         boolean cancelled = request.task.cancel(true);
         if (notifyClient) {
             safeSend(request.emitter, "cancelled", Map.of("requestId", request.requestId));
@@ -154,7 +166,18 @@ public class AssistantStreamingService {
 
     private void remove(String requestId, boolean cancel) {
         ActiveRequest request = active.remove(requestId);
-        if (cancel && request != null) cancelRequest(request, false);
+        if (request == null) return;
+        request.cancelHeartbeat();
+        if (cancel) cancelRequest(request, false);
+    }
+
+    private void heartbeat(String requestId, SseEmitter emitter) {
+        if (!active.containsKey(requestId)) return;
+        try {
+            send(emitter, "heartbeat", Map.of("requestId", requestId));
+        } catch (Exception connectionClosed) {
+            remove(requestId, true);
+        }
     }
 
     private void send(SseEmitter emitter, String name, Object data) throws IOException {
@@ -187,7 +210,24 @@ public class AssistantStreamingService {
         return false;
     }
 
-    private record ActiveRequest(String requestId, FutureTask<Void> task, String ownerId,
-                                 SseEmitter emitter) {
+    private static final class ActiveRequest {
+        private final String requestId;
+        private final FutureTask<Void> task;
+        private final String ownerId;
+        private final SseEmitter emitter;
+        private volatile ScheduledFuture<?> heartbeat;
+
+        private ActiveRequest(String requestId, FutureTask<Void> task, String ownerId,
+                              SseEmitter emitter) {
+            this.requestId = requestId;
+            this.task = task;
+            this.ownerId = ownerId;
+            this.emitter = emitter;
+        }
+
+        private void cancelHeartbeat() {
+            ScheduledFuture<?> current = heartbeat;
+            if (current != null) current.cancel(false);
+        }
     }
 }

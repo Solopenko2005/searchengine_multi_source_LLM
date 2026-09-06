@@ -9,6 +9,8 @@ import searchengine.dto.assistant.ChatRequest;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -29,8 +31,16 @@ class AssistantStreamingServiceTest {
         EmbeddingIndexCoordinator embeddingIndexCoordinator = mock(EmbeddingIndexCoordinator.class);
         List<Runnable> queuedTasks = new ArrayList<>();
         Executor executor = queuedTasks::add;
+        ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
+        ScheduledFuture<?> heartbeat = mock(ScheduledFuture.class);
+        org.mockito.Mockito.doReturn(heartbeat).when(scheduler).scheduleAtFixedRate(
+                org.mockito.ArgumentMatchers.any(Runnable.class),
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.any());
         AssistantStreamingService service = new AssistantStreamingService(
-                assistantService, llmClient, metricsService, embeddingIndexCoordinator, executor);
+                assistantService, llmClient, metricsService, embeddingIndexCoordinator,
+                executor, scheduler);
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken("alice", "password", List.of()));
 

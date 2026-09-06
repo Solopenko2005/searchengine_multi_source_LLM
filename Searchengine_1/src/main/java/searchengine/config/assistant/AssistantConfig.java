@@ -92,7 +92,7 @@ public class AssistantConfig {
         private int maxInputChars = 50000;
 
         /** Total document excerpt budget for a CPU-hosted local language model. */
-        private int localContextChars = 3600;
+        private int localContextChars = 1200;
 
         /** Сколько документов одновременно использовать при семантическом анализе тематик. */
         private int topicDocumentLimit = 80;

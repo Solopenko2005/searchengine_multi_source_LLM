@@ -129,9 +129,9 @@ class LlmTopicAnalysisServiceTest {
         ArgumentCaptor<List<ChatMessage>> messages = ArgumentCaptor.forClass(List.class);
         verify(client).completeJson(messages.capture(), anyString(), any());
         String prompt = messages.getValue().get(1).getContent();
-        assertThat(prompt.length()).isLessThan(8_500);
-        assertThat(prompt).contains("document id=\"D14\"");
-        assertThat(prompt).doesNotContain("document id=\"D15\"");
+        assertThat(prompt.length()).isLessThan(2_500);
+        assertThat(prompt).contains("document id=\"D5\"");
+        assertThat(prompt).doesNotContain("document id=\"D6\"");
     }
 
     private Page document() {

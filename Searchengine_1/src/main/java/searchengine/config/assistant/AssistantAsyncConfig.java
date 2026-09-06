@@ -5,6 +5,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 @Configuration
 public class AssistantAsyncConfig {
@@ -32,5 +34,14 @@ public class AssistantAsyncConfig {
         executor.setAwaitTerminationSeconds(10);
         executor.initialize();
         return executor;
+    }
+
+    @Bean(name = "assistantHeartbeatScheduler", destroyMethod = "shutdown")
+    public ScheduledExecutorService assistantHeartbeatScheduler() {
+        return Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "assistant-heartbeat");
+            thread.setDaemon(true);
+            return thread;
+        });
     }
 }

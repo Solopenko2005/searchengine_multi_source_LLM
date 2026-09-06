@@ -117,11 +117,13 @@ public class LlmClient {
         body.put("store", false);
         int outputTokens = Math.max(128, llm.getMaxOutputTokens());
         if (localEndpoint) {
-            // Structured topic analysis needs substantially more room than a short
-            // chat answer. Truncating it produces invalid JSON and forces fallback.
+            // CPU-hosted models must start returning visible text quickly. A large
+            // generation budget lets an abandoned request keep the model busy long
+            // after the browser has gone away. Structured topic analysis still gets
+            // more room because truncated JSON cannot be parsed.
             outputTokens = schema == null
-                    ? Math.min(outputTokens, 1400)
-                    : Math.max(1200, Math.min(outputTokens, 1800));
+                    ? Math.min(outputTokens, 256)
+                    : Math.max(640, Math.min(outputTokens, 768));
         }
         body.put("max_output_tokens", outputTokens);
         safetyIdentifier().ifPresent(value -> body.put("safety_identifier", value));
@@ -178,6 +180,16 @@ public class LlmClient {
             text.put("format", Map.of("type", "text"));
         }
         body.put("text", text);
+        if (log.isDebugEnabled()) {
+            int inputChars = messages.stream()
+                    .filter(java.util.Objects::nonNull)
+                    .map(ChatMessage::getContent)
+                    .filter(java.util.Objects::nonNull)
+                    .mapToInt(String::length)
+                    .sum();
+            log.debug("LLM request model={}, local={}, inputChars={}, outputTokens={}, structured={}",
+                    llm.getModel(), localEndpoint, inputChars, outputTokens, schema != null);
+        }
         return body;
     }
 

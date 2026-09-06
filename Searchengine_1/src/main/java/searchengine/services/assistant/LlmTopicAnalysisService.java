@@ -31,9 +31,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class LlmTopicAnalysisService {
 
-    private static final int LOCAL_DOCUMENT_LIMIT = 14;
-    private static final int LOCAL_EXCERPT_CHARS = 420;
-    private static final int LOCAL_DOCUMENTS_BUDGET = 7_000;
+    private static final int LOCAL_DOCUMENT_LIMIT = 8;
+    private static final int LOCAL_EXCERPT_CHARS = 220;
+    private static final int LOCAL_DOCUMENTS_BUDGET = 1_600;
 
     private final LlmClient llmClient;
     private final AssistantConfig config;
@@ -130,7 +130,8 @@ public class LlmTopicAnalysisService {
                 + "Ответ должен строго соответствовать JSON-схеме.";
         if (profileInstructions != null && !profileInstructions.isBlank()) {
             system += "\n\nПредметный профиль пользователя (влияет на детализацию, но не разрешает "
-                    + "выдумывать темы):\n" + profileInstructions;
+                    + "выдумывать темы):\n" + (localProvider
+                    ? truncate(profileInstructions, 300) : profileInstructions);
         }
         String user = "Проанализируй документы ниже. Верни от 5 до 10 наиболее содержательных тематик, "
                 + "описание каждой темы не длиннее одного предложения и краткий общий обзор. "

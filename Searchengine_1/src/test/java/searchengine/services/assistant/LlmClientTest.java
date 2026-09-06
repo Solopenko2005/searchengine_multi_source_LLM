@@ -99,6 +99,7 @@ class LlmClientTest {
         JsonNode request = mapper.readTree(requestBody.get());
         assertThat(result).isEqualTo("{\"value\":\"ok\"}");
         assertThat(request.path("text").path("format").path("type").asText()).isEqualTo("text");
+        assertThat(request.path("max_output_tokens").asInt()).isEqualTo(768);
         assertThat(request.path("instructions").asText()).contains("JSON Schema", "required", "value");
     }
 
@@ -122,9 +123,10 @@ class LlmClientTest {
 
     @Test
     void streamsResponsesApiTextDeltas() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
         server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/responses", exchange -> {
-            exchange.getRequestBody().readAllBytes();
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             String response = """
                     event: response.output_text.delta
                     data: {"type":"response.output_text.delta","delta":"Первая "}
@@ -153,5 +155,8 @@ class LlmClientTest {
                 .collectList().block(Duration.ofSeconds(5));
 
         assertThat(deltas).containsExactly("Первая ", "часть");
+        JsonNode request = new ObjectMapper().readTree(requestBody.get());
+        assertThat(request.path("max_output_tokens").asInt()).isEqualTo(256);
+        assertThat(request.path("input").get(0).path("content").asText()).startsWith("/no_think\n");
     }
 }
