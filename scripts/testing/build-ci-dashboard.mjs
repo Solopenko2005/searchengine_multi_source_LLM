@@ -164,4 +164,17 @@ const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta n
 fs.writeFileSync(path.join(outputRoot, "index.html"), html);
 fs.writeFileSync(path.join(outputRoot, "quality-summary.json"), JSON.stringify({ repository, revision, totals, modules: results }, null, 2));
 fs.writeFileSync(path.join(outputRoot, ".nojekyll"), "");
+
+if (process.env.GITHUB_STEP_SUMMARY) {
+  const rows = results.map(module =>
+    `| ${module.name} | ${module.tests.tests} | ${module.tests.failures + module.tests.errors} | ${module.coverage.linePercent}% | ${module.coverage.branchPercent}% | ${module.passed ? "PASS" : "FAIL"} |`
+  ).join("\n");
+  const runUrl = `${process.env.GITHUB_SERVER_URL ?? "https://github.com"}/${repository}/actions/runs/${process.env.GITHUB_RUN_ID ?? ""}`;
+  const markdown = `# Доказательная база тестирования\n\n` +
+    `| Модуль | JUnit | Ошибки | Покрытие строк | Покрытие ветвей | Статус |\n` +
+    `|---|---:|---:|---:|---:|---|\n${rows}\n\n` +
+    `**Итого:** ${totals.tests} тестов, ${totals.failures} ошибок, ${totals.linePercent}% покрытия строк.\n\n` +
+    `Полная интерактивная панель и JaCoCo HTML доступны в артефакте \`quality-site-snapshot\` [этого запуска](${runUrl}).\n`;
+  fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown);
+}
 console.log(JSON.stringify({ outputRoot, totals, modules: results }, null, 2));
