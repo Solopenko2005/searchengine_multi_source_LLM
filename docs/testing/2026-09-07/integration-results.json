@@ -1,0 +1,187 @@
+{
+  "generatedAt": "2026-09-07T17:43:48.819Z",
+  "target": "https://search.5-42-117-227.sslip.io/",
+  "environment": "production, read-only checks",
+  "tls": {
+    "passed": true,
+    "authorized": true,
+    "protocol": "TLSv1.3",
+    "subject": "search.5-42-117-227.sslip.io",
+    "issuer": "Let's Encrypt",
+    "validFrom": "Sep  5 15:26:49 2026 GMT",
+    "validTo": "Dec  4 15:26:48 2026 GMT"
+  },
+  "publicChecks": [
+    {
+      "name": "Главная страница",
+      "method": "GET",
+      "path": "/",
+      "status": 200,
+      "expected": [
+        200
+      ],
+      "durationMs": 486.4,
+      "passed": true,
+      "contentType": "text/html;charset=UTF-8",
+      "location": "",
+      "securityHeaders": {
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin"
+      },
+      "excerpt": "<!doctype html> <html lang=\"ru\"> <head> <meta charset=\"utf-8\"> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"> <meta name=\"description\" content=\"Научный поиск: локальная LLM-система для точного и безопасного поиска по академическим материалам.\"> <meta name=\"theme-color\" content=\"#FDFDF5\"> <title>Научный поиск | Локальная поисковая систем"
+    },
+    {
+      "name": "Политика конфиденциальности",
+      "method": "GET",
+      "path": "/privacy",
+      "status": 200,
+      "expected": [
+        200
+      ],
+      "durationMs": 162.5,
+      "passed": true,
+      "contentType": "text/html;charset=UTF-8",
+      "location": "",
+      "securityHeaders": {
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin"
+      }
+    },
+    {
+      "name": "Страница входа",
+      "method": "GET",
+      "path": "/login",
+      "status": 200,
+      "expected": [
+        200
+      ],
+      "durationMs": 200.7,
+      "passed": true,
+      "contentType": "text/html;charset=UTF-8",
+      "location": "",
+      "securityHeaders": {
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin"
+      }
+    },
+    {
+      "name": "Captcha через сервис авторизации",
+      "method": "GET",
+      "path": "/auth-api/api/v1/auth/captcha",
+      "status": 200,
+      "expected": [
+        200
+      ],
+      "durationMs": 214.6,
+      "passed": true,
+      "contentType": "application/json",
+      "location": "",
+      "securityHeaders": {
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin"
+      },
+      "json": {
+        "secretLength": 6,
+        "imageFormat": "PNG base64"
+      }
+    },
+    {
+      "name": "Swagger закрыт для анонимного пользователя",
+      "method": "GET",
+      "path": "/api-docs",
+      "status": 302,
+      "expected": [
+        302,
+        401
+      ],
+      "durationMs": 174.7,
+      "passed": true,
+      "contentType": "",
+      "location": "https://search.5-42-117-227.sslip.io/login",
+      "securityHeaders": {
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin"
+      }
+    },
+    {
+      "name": "Сырой OpenAPI авторизации не опубликован",
+      "method": "GET",
+      "path": "/auth-api/v3/api-docs",
+      "status": 404,
+      "expected": [
+        404
+      ],
+      "durationMs": 494.2,
+      "passed": true,
+      "contentType": "",
+      "location": "",
+      "securityHeaders": {
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin"
+      }
+    },
+    {
+      "name": "API поиска закрыт для анонимного пользователя",
+      "method": "GET",
+      "path": "/api/search?query=test",
+      "status": 302,
+      "expected": [
+        302,
+        401
+      ],
+      "durationMs": 126.9,
+      "passed": true,
+      "contentType": "",
+      "location": "https://search.5-42-117-227.sslip.io/login",
+      "securityHeaders": {
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin"
+      }
+    },
+    {
+      "name": "Метрики LLM закрыты для анонимного пользователя",
+      "method": "GET",
+      "path": "/api/assistant/metrics",
+      "status": 302,
+      "expected": [
+        302,
+        401
+      ],
+      "durationMs": 173.5,
+      "passed": true,
+      "contentType": "",
+      "location": "https://search.5-42-117-227.sslip.io/login",
+      "securityHeaders": {
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "referrer-policy": "strict-origin-when-cross-origin"
+      }
+    }
+  ],
+  "authenticated": {
+    "available": false,
+    "checks": []
+  },
+  "summary": {
+    "passed": 9,
+    "failed": 0,
+    "total": 9,
+    "medianDurationMs": 174.7,
+    "p95DurationMs": 494.2
+  }
+}

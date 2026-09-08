@@ -1,0 +1,316 @@
+{
+  "generatedAt": "2026-09-08T18:22:55.545Z",
+  "testedCommit": "working-tree",
+  "target": "https://search.5-42-117-227.sslip.io/",
+  "verdict": "Условно готово к пилотной эксплуатации",
+  "modules": [
+    {
+      "id": "search",
+      "name": "Поисковая система и LLM",
+      "path": "Searchengine_1",
+      "tests": {
+        "suites": 21,
+        "tests": 43,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "durationSeconds": 15.93,
+        "passed": 43
+      },
+      "coverage": {
+        "line": {
+          "missed": 5996,
+          "covered": 1336,
+          "total": 7332,
+          "percent": 18.2
+        },
+        "branch": {
+          "missed": 3034,
+          "covered": 533,
+          "total": 3567,
+          "percent": 14.9
+        },
+        "instruction": {
+          "missed": 31000,
+          "covered": 7125,
+          "total": 38125,
+          "percent": 18.7
+        }
+      }
+    },
+    {
+      "id": "authorization",
+      "name": "Авторизация",
+      "path": "authorization",
+      "tests": {
+        "suites": 10,
+        "tests": 48,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "durationSeconds": 17.747,
+        "passed": 48
+      },
+      "coverage": {
+        "line": {
+          "missed": 224,
+          "covered": 284,
+          "total": 508,
+          "percent": 55.9
+        },
+        "branch": {
+          "missed": 79,
+          "covered": 63,
+          "total": 142,
+          "percent": 44.4
+        },
+        "instruction": {
+          "missed": 938,
+          "covered": 1298,
+          "total": 2236,
+          "percent": 58.1
+        }
+      }
+    },
+    {
+      "id": "email",
+      "name": "Отправка e-mail",
+      "path": "emailsender",
+      "tests": {
+        "suites": 1,
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "durationSeconds": 15.883,
+        "passed": 1
+      },
+      "coverage": {
+        "line": {
+          "missed": 40,
+          "covered": 17,
+          "total": 57,
+          "percent": 29.8
+        },
+        "branch": {
+          "missed": 10,
+          "covered": 0,
+          "total": 10,
+          "percent": 0
+        },
+        "instruction": {
+          "missed": 201,
+          "covered": 48,
+          "total": 249,
+          "percent": 19.3
+        }
+      }
+    }
+  ],
+  "totals": {
+    "tests": 92,
+    "failed": 0,
+    "passed": 92,
+    "overallLineCoveragePercent": 20.7
+  },
+  "integration": {
+    "passed": 9,
+    "failed": 0,
+    "total": 9,
+    "medianDurationMs": 174.7,
+    "p95DurationMs": 494.2
+  },
+  "dataset": {
+    "sites": 65,
+    "pages": 10974,
+    "lemmas": 230955,
+    "searchIndexRows": 2447508,
+    "assistantChunks": 44972
+  },
+  "edgeLoad": [
+    {
+      "generatedAt": "2026-09-07T17:37:54.602Z",
+      "target": "https://search.5-42-117-227.sslip.io/",
+      "concurrency": 1,
+      "configuredDurationSeconds": 10,
+      "elapsedSeconds": 10.12,
+      "requests": 58,
+      "successful": 58,
+      "failed": 0,
+      "transportErrors": 0,
+      "assertionErrors": 0,
+      "statusCounts": {
+        "200": 58
+      },
+      "requestsPerSecond": 5.73,
+      "latencyMs": {
+        "min": 110.39,
+        "average": 171.65,
+        "p50": 150.46,
+        "p90": 301.85,
+        "p95": 385.05,
+        "p99": 420.64,
+        "max": 420.64
+      },
+      "thresholds": {
+        "errorRateBelowOnePercent": true,
+        "p95BelowTwoSeconds": true
+      }
+    },
+    {
+      "generatedAt": "2026-09-07T17:38:27.311Z",
+      "target": "https://search.5-42-117-227.sslip.io/",
+      "concurrency": 5,
+      "configuredDurationSeconds": 15,
+      "elapsedSeconds": 15.55,
+      "requests": 433,
+      "successful": 433,
+      "failed": 0,
+      "transportErrors": 0,
+      "assertionErrors": 0,
+      "statusCounts": {
+        "200": 433
+      },
+      "requestsPerSecond": 27.84,
+      "latencyMs": {
+        "min": 97.05,
+        "average": 171.78,
+        "p50": 136.85,
+        "p90": 210,
+        "p95": 407.24,
+        "p99": 740.12,
+        "max": 2179.13
+      },
+      "thresholds": {
+        "errorRateBelowOnePercent": true,
+        "p95BelowTwoSeconds": true
+      }
+    },
+    {
+      "generatedAt": "2026-09-07T17:38:47.922Z",
+      "target": "https://search.5-42-117-227.sslip.io/",
+      "concurrency": 10,
+      "configuredDurationSeconds": 15,
+      "elapsedSeconds": 15.1,
+      "requests": 896,
+      "successful": 896,
+      "failed": 0,
+      "transportErrors": 0,
+      "assertionErrors": 0,
+      "statusCounts": {
+        "200": 896
+      },
+      "requestsPerSecond": 59.33,
+      "latencyMs": {
+        "min": 95.97,
+        "average": 162.7,
+        "p50": 146.88,
+        "p90": 205.56,
+        "p95": 286.99,
+        "p99": 480.67,
+        "max": 963.94
+      },
+      "thresholds": {
+        "errorRateBelowOnePercent": true,
+        "p95BelowTwoSeconds": true
+      }
+    },
+    {
+      "generatedAt": "2026-09-07T17:39:09.521Z",
+      "target": "https://search.5-42-117-227.sslip.io/",
+      "concurrency": 20,
+      "configuredDurationSeconds": 15,
+      "elapsedSeconds": 15.26,
+      "requests": 1823,
+      "successful": 1823,
+      "failed": 0,
+      "transportErrors": 0,
+      "assertionErrors": 0,
+      "statusCounts": {
+        "200": 1823
+      },
+      "requestsPerSecond": 119.43,
+      "latencyMs": {
+        "min": 96.76,
+        "average": 158.43,
+        "p50": 140.09,
+        "p90": 206.03,
+        "p95": 268.45,
+        "p99": 461.17,
+        "max": 1598.39
+      },
+      "thresholds": {
+        "errorRateBelowOnePercent": true,
+        "p95BelowTwoSeconds": true
+      }
+    }
+  ],
+  "databaseLoad": [
+    {
+      "clients": 1,
+      "durationSeconds": 10,
+      "transactions": 209,
+      "failedTransactions": 0,
+      "averageLatencyMs": 48.051,
+      "transactionsPerSecond": 20.811252
+    },
+    {
+      "clients": 5,
+      "durationSeconds": 10,
+      "transactions": 799,
+      "failedTransactions": 0,
+      "averageLatencyMs": 62.913,
+      "transactionsPerSecond": 79.474288
+    },
+    {
+      "clients": 10,
+      "durationSeconds": 10,
+      "transactions": 863,
+      "failedTransactions": 0,
+      "averageLatencyMs": 116.427,
+      "transactionsPerSecond": 85.890645
+    }
+  ],
+  "llm": {
+    "generatedAt": "2026-09-07T17:45:33Z",
+    "passed": true,
+    "status": 200,
+    "model": "local-qwen3-4b",
+    "durationMs": 10478.39,
+    "answer": "Для того чтобы улучшить точность и актуальность ответов на запросы, используя внешние данные и контекст.",
+    "usage": {
+      "input_tokens": 39,
+      "output_tokens": 31,
+      "total_tokens": 70,
+      "input_tokens_details": {
+        "cached_tokens": 3
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      }
+    }
+  },
+  "headline": {
+    "maxEdgeConcurrency": 20,
+    "maxEdgeRequestsPerSecond": 119.43,
+    "maxEdgeP95Ms": 268.45,
+    "maxEdgeErrors": 0,
+    "databaseClients": 10,
+    "databaseTransactionsPerSecond": 85.890645,
+    "databaseAverageLatencyMs": 116.427,
+    "databaseFailedTransactions": 0,
+    "llmDurationSeconds": 10.5
+  },
+  "limitations": [
+    "Покрытие строками составляет менее 60 процентов в поисковом и e-mail модулях.",
+    "Нагрузочный HTTP-тест production выполнен для публичного web-контура без пользовательских данных.",
+    "Поисковый SQL проверен под read-only нагрузкой на фактическом production-наборе, но полный авторизованный RAG-сценарий под нагрузкой не запускался.",
+    "LLM smoke-тест подтверждает доступность модели, однако 10,48 секунды на короткий ответ требуют оптимизации перед массовой эксплуатацией."
+  ],
+  "recommendations": [
+    "Поднять покрытие критических сервисов SearchService, DocumentIndexingService, AssistantService и email-контроллера до 60 процентов и выше.",
+    "Добавить отдельный staging-контур с обезличенной копией данных для авторизованных E2E и RAG load-тестов.",
+    "Ввести SLO: p95 поиска до 2 секунд, ошибки до 1 процента, time-to-first-token LLM до 5 секунд.",
+    "Подключить непрерывный мониторинг p95, ошибок, очереди индексации, длины контекста и времени генерации LLM."
+  ]
+}

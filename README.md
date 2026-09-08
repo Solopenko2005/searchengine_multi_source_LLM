@@ -1,5 +1,19 @@
 # Search Engine + LLM
 
+[![CI and Quality Evidence](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/ci.yml)
+[![Production Integration Evidence](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/integration-evidence.yml/badge.svg)](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/integration-evidence.yml)
+
+Публичная доказательная база тестирования:
+
+- [интерактивная панель качества и детальные отчёты JaCoCo](https://solopenko2005.github.io/searchengine_multi_source_LLM/);
+- [журнал CI/CD с каждым запуском и скачиваемыми артефактами](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/ci.yml);
+- [код модульных тестов](https://github.com/Solopenko2005/searchengine_multi_source_LLM/tree/main/Searchengine_1/src/test), [авторизации](https://github.com/Solopenko2005/searchengine_multi_source_LLM/tree/main/authorization/src/test) и [e-mail-сервиса](https://github.com/Solopenko2005/searchengine_multi_source_LLM/tree/main/emailsender/src/test);
+- [код интеграционного и нагрузочного тестирования](https://github.com/Solopenko2005/searchengine_multi_source_LLM/tree/main/scripts/testing);
+- [формальный протокол, raw-результаты, графики и презентация](https://github.com/Solopenko2005/searchengine_multi_source_LLM/tree/main/docs/testing/2026-09-07);
+- [карточка базы, на которой выполнялся нагрузочный тест](https://github.com/Solopenko2005/searchengine_multi_source_LLM/blob/main/docs/testing/2026-09-07/database/DATASET_CARD.md).
+
+Пояснение, какие материалы использовать на защите и как повторить прогоны: [TESTING.md](TESTING.md).
+
 Поисковая система на Java 17 и Spring Boot для индексации сайтов, PDF/DOCX-документов, лемматизированного поиска и ответов по найденным материалам с помощью OpenAI.
 
 ## Возможности

@@ -1,0 +1,28 @@
+{
+  "capturedAt": "2026-09-07",
+  "environment": "production",
+  "database": "PostgreSQL",
+  "loadMode": "read-only",
+  "counts": {
+    "sites": 65,
+    "pages": 10974,
+    "lemmas": 230955,
+    "searchIndexRows": 2447508,
+    "assistantChunks": 44972
+  },
+  "largestTables": {
+    "page": "360 MB",
+    "search_index": "279 MB",
+    "assistant_chunk": "252 MB",
+    "topic": "70 MB",
+    "lemma": "29 MB"
+  },
+  "pgbench": {
+    "testedLemma": "агентство",
+    "clients": [1, 5, 10],
+    "durationSecondsPerStage": 10,
+    "failedTransactions": 0
+  },
+  "rawProductionDumpPublished": false,
+  "reason": "personal data, user documents and copyrighted source content"
+}

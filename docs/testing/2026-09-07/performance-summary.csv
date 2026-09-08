@@ -1,0 +1,9 @@
+layer,scenario,concurrency,throughput_per_second,latency_ms,error_count
+HTTP,Публичный web-контур,1,5.73,385.05,0
+HTTP,Публичный web-контур,5,27.84,407.24,0
+HTTP,Публичный web-контур,10,59.33,286.99,0
+HTTP,Публичный web-контур,20,119.43,268.45,0
+PostgreSQL,Поисковый SQL,1,20.811252,48.051,0
+PostgreSQL,Поисковый SQL,5,79.474288,62.913,0
+PostgreSQL,Поисковый SQL,10,85.890645,116.427,0
+LLM,Короткий ответ,1,0.1,10478.39,0

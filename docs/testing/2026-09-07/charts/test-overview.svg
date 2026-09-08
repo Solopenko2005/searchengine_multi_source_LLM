@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680"><rect width="1200" height="680" fill="#FDFDF5"/><style>text{font-family:Montserrat,Arial,sans-serif;fill:#17213D}.title{font-size:32px;font-weight:700;fill:#3D568F}.label{font-size:22px}.small{font-size:18px}.value{font-size:21px;font-weight:700;fill:#3D568F}.grid{stroke:#DCE5F6;stroke-width:1}</style><text class="title" x="60" y="62">Модульные тесты и покрытие строк</text><text class="label" x="60" y="155">Поисковая система и LLM</text>
+      <rect x="390" y="127" width="360" height="32" rx="8" fill="#DCE5F6"/><rect x="390" y="127" width="309.6" height="32" rx="8" fill="#9FBAF1"/>
+      <text class="value" x="765" y="150">43 тестов</text>
+      <rect x="390" y="177" width="360" height="32" rx="8" fill="#DCE5F6"/><rect x="390" y="177" width="65.52" height="32" rx="8" fill="#3D568F"/>
+      <text class="value" x="765" y="202">18.2% строк</text><text class="label" x="60" y="305">Авторизация</text>
+      <rect x="390" y="277" width="360" height="32" rx="8" fill="#DCE5F6"/><rect x="390" y="277" width="345.59999999999997" height="32" rx="8" fill="#9FBAF1"/>
+      <text class="value" x="765" y="300">48 тестов</text>
+      <rect x="390" y="327" width="360" height="32" rx="8" fill="#DCE5F6"/><rect x="390" y="327" width="201.23999999999998" height="32" rx="8" fill="#3D568F"/>
+      <text class="value" x="765" y="352">55.9% строк</text><text class="label" x="60" y="455">Отправка e-mail</text>
+      <rect x="390" y="427" width="360" height="32" rx="8" fill="#DCE5F6"/><rect x="390" y="427" width="7.2" height="32" rx="8" fill="#9FBAF1"/>
+      <text class="value" x="765" y="450">1 тестов</text>
+      <rect x="390" y="477" width="360" height="32" rx="8" fill="#DCE5F6"/><rect x="390" y="477" width="107.28" height="32" rx="8" fill="#3D568F"/>
+      <text class="value" x="765" y="502">29.8% строк</text><text class="small" x="60" y="630">Все 92 теста пройдены. Общее покрытие строк 20.7%.</text></svg>

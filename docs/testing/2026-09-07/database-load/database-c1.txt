@@ -1,0 +1,15 @@
+pgbench (18.6)
+transaction type: /tmp/scientific-search-read.sql
+scaling factor: 1
+query mode: prepared
+number of clients: 1
+number of threads: 1
+maximum number of tries: 1
+duration: 10 s
+number of transactions actually processed: 209
+number of failed transactions: 0 (0.000%)
+latency average = 48.051 ms
+initial connection time = 6.966 ms
+tps = 20.811252 (without initial connection time)
+statement latencies in milliseconds and failures:
+        48.047           0 SELECT si.page_id, SUM(si.ranking) AS relevance

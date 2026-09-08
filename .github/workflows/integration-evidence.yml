@@ -1,0 +1,34 @@
+name: Production Integration Evidence
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  production-smoke:
+    name: Public API, security and TLS checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run read-only integration checks
+        run: >-
+          node scripts/testing/production-check.mjs
+          --base https://search.5-42-117-227.sslip.io/
+          --credentials-file .ci-no-credentials
+          --output artifacts/integration-results.json
+      - name: Upload integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-evidence-${{ github.run_number }}
+          path: artifacts/integration-results.json
+          if-no-files-found: warn
+          retention-days: 90

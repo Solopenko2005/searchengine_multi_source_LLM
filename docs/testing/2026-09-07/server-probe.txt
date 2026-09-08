@@ -1,0 +1,67 @@
+[containers]
+{"Command":"\"java -jar /app/appl…\"","CreatedAt":"2026-09-06 15:19:07 +0000 UTC","Engine":"","ExitCode":0,"Health":"","ID":"25c4053583c4","Image":"scientific-search-authorization","Labels":"com.docker.compose.config-hash=3dcfa10ffa91a766e72821e54e7c563ecf3dd79e68a4222fe31688dae6d018d9,com.docker.compose.depends_on=email:service_started:false,com.docker.compose.image=sha256:b9c77ba16dc2adc2396ed83cb0f6e539e7e8ea23a69f6d27dd3e453918fc13c6,com.docker.compose.oneoff=False,com.docker.compose.project=scientific-search,com.docker.compose.project.environment_file=/home/scientific/app/deploy/.env.production,com.docker.compose.version=5.5.1,org.opencontainers.image.version=22.04,com.docker.compose.container-number=1,com.docker.compose.project.config_files=/home/scientific/app/deploy/docker-compose.yml,com.docker.compose.project.working_dir=/home/scientific/app/deploy,com.docker.compose.replace=authorization-1,com.docker.compose.service=authorization","LocalVolumes":"0","Mounts":"","Name":"scientific-search-authorization-1","Names":"scientific-search-authorization-1","Networks":"scientific-search_backend","Ports":"5555/tcp","Project":"scientific-search","Publishers":[{"URL":"","TargetPort":5555,"PublishedPort":0,"Protocol":"tcp"}],"RunningFor":"26 hours ago","Service":"authorization","Size":"0B","State":"running","Status":"Up 26 hours"}
+{"Command":"\"caddy run --config …\"","CreatedAt":"2026-09-05 17:00:47 +0000 UTC","Engine":"","ExitCode":0,"Health":"","ID":"a6c769c63873","Image":"caddy:2-alpine","Labels":"com.docker.compose.image=sha256:98eb57d882ccd5213d1688764db10c1ca2c58a1ca3a6717a3411ad798f7a423a,com.docker.compose.project=scientific-search,com.docker.compose.service=caddy,org.opencontainers.image.documentation=https://caddyserver.com/docs,org.opencontainers.image.source=https://github.com/caddyserver/caddy-docker,org.opencontainers.image.vendor=Light Code Labs,com.docker.compose.config-hash=2c6d1d6468dcbfcd42274c75bc47371894780729c4e72a4ad2c388d70a5cb019,com.docker.compose.depends_on=search:service_started:false,com.docker.compose.project.config_files=/home/scientific/app/deploy/docker-compose.yml,com.docker.compose.project.environment_file=/home/scientific/app/deploy/.env.production,org.opencontainers.image.licenses=Apache-2.0,org.opencontainers.image.title=Caddy,com.docker.compose.container-number=1,com.docker.compose.oneoff=False,com.docker.compose.version=5.5.1,org.opencontainers.image.description=a powerful, enterprise-ready, open source web server with automatic HTTPS written in Go,org.opencontainers.image.version=v2.11.4,com.docker.compose.project.working_dir=/home/scientific/app/deploy,org.opencontainers.image.url=https://caddyserver.com","LocalVolumes":"2","Mounts":"scientific-sea…,scientific-sea…,/home/scientif…","Name":"scientific-search-caddy-1","Names":"scientific-search-caddy-1","Networks":"scientific-search_backend","Ports":"0.0.0.0:80-\u003e80/tcp, [::]:80-\u003e80/tcp, 0.0.0.0:443-\u003e443/tcp, [::]:443-\u003e443/tcp, 0.0.0.0:443-\u003e443/udp, [::]:443-\u003e443/udp, 2019/tcp","Project":"scientific-search","Publishers":[{"URL":"0.0.0.0","TargetPort":80,"PublishedPort":80,"Protocol":"tcp"},{"URL":"::","TargetPort":80,"PublishedPort":80,"Protocol":"tcp"},{"URL":"0.0.0.0","TargetPort":443,"PublishedPort":443,"Protocol":"tcp"},{"URL":"::","TargetPort":443,"PublishedPort":443,"Protocol":"tcp"},{"URL":"0.0.0.0","TargetPort":443,"PublishedPort":443,"Protocol":"udp"},{"URL":"::","TargetPort":443,"PublishedPort":443,"Protocol":"udp"},{"URL":"","TargetPort":2019,"PublishedPort":0,"Protocol":"tcp"}],"RunningFor":"2 days ago","Service":"caddy","Size":"0B","State":"running","Status":"Up 26 hours"}
+{"Command":"\"docker-entrypoint.s…\"","CreatedAt":"2026-09-05 17:00:47 +0000 UTC","Engine":"","ExitCode":0,"Health":"healthy","ID":"09bf1ea774ce","Image":"postgres:18-alpine","Labels":"com.docker.compose.version=5.5.1,com.docker.compose.container-number=1,com.docker.compose.depends_on=,com.docker.compose.project=scientific-search,com.docker.compose.project.environment_file=/home/scientific/app/deploy/.env.production,com.docker.compose.project.working_dir=/home/scientific/app/deploy,com.docker.compose.config-hash=6a3552b57387d01a6df409762653db9fde7d6ef7854266a8a7c22278e13d3ff7,com.docker.compose.image=sha256:63bdc97d67b5133bf0e5ebd500bec6d046fa851dc81340d838f0347e616107e8,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=/home/scientific/app/deploy/docker-compose.yml,com.docker.compose.service=database","LocalVolumes":"1","Mounts":"scientific-sea…","Name":"scientific-search-database-1","Names":"scientific-search-database-1","Networks":"scientific-search_backend","Ports":"5432/tcp","Project":"scientific-search","Publishers":[{"URL":"","TargetPort":5432,"PublishedPort":0,"Protocol":"tcp"}],"RunningFor":"2 days ago","Service":"database","Size":"0B","State":"running","Status":"Up 2 days (healthy)"}
+{"Command":"\"java -jar /app/appl…\"","CreatedAt":"2026-09-06 15:19:05 +0000 UTC","Engine":"","ExitCode":0,"Health":"","ID":"fbcbb143fada","Image":"scientific-search-email","Labels":"com.docker.compose.container-number=1,com.docker.compose.image=sha256:089117904d8d780819ea1f1ab79164e61c3ca532656d9534e548b0b4e6041d8c,com.docker.compose.oneoff=False,com.docker.compose.project.config_files=/home/scientific/app/deploy/docker-compose.yml,com.docker.compose.project.working_dir=/home/scientific/app/deploy,com.docker.compose.version=5.5.1,com.docker.compose.config-hash=c14fafbd21e4ef841463bc2ce6a31b1b9f23837c5fb426c040e5c9cdf2fc3dc7,com.docker.compose.depends_on=,com.docker.compose.project=scientific-search,com.docker.compose.project.environment_file=/home/scientific/app/deploy/.env.production,com.docker.compose.replace=email-1,com.docker.compose.service=email,org.opencontainers.image.version=22.04","LocalVolumes":"0","Mounts":"","Name":"scientific-search-email-1","Names":"scientific-search-email-1","Networks":"scientific-search_backend","Ports":"8771/tcp","Project":"scientific-search","Publishers":[{"URL":"","TargetPort":8771,"PublishedPort":0,"Protocol":"tcp"}],"RunningFor":"26 hours ago","Service":"email","Size":"0B","State":"running","Status":"Up 26 hours"}
+{"Command":"\"docker-entrypoint.s…\"","CreatedAt":"2026-09-05 17:00:47 +0000 UTC","Engine":"","ExitCode":0,"Health":"healthy","ID":"efb216b5d326","Image":"redis:7-alpine","Labels":"com.docker.compose.oneoff=False,com.docker.compose.project=scientific-search,com.docker.compose.project.config_files=/home/scientific/app/deploy/docker-compose.yml,com.docker.compose.project.environment_file=/home/scientific/app/deploy/.env.production,com.docker.compose.project.working_dir=/home/scientific/app/deploy,com.docker.compose.service=redis,com.docker.compose.config-hash=5209a52ff987a75df9e4a6cd1233eca5ddaccf80804978d98f88fc8ba36fb8bf,com.docker.compose.container-number=1,com.docker.compose.image=sha256:1db42ccef14898aa29bae778452d567534b59c107129cbc1163fb552de184d3c,com.docker.compose.version=5.5.1,com.docker.compose.depends_on=","LocalVolumes":"1","Mounts":"scientific-sea…","Name":"scientific-search-redis-1","Names":"scientific-search-redis-1","Networks":"scientific-search_backend","Ports":"6379/tcp","Project":"scientific-search","Publishers":[{"URL":"","TargetPort":6379,"PublishedPort":0,"Protocol":"tcp"}],"RunningFor":"2 days ago","Service":"redis","Size":"0B","State":"running","Status":"Up 2 days (healthy)"}
+{"Command":"\"java -jar /app/appl…\"","CreatedAt":"2026-09-06 15:19:08 +0000 UTC","Engine":"","ExitCode":0,"Health":"","ID":"d6e305f3c035","Image":"scientific-search-search","Labels":"org.opencontainers.image.version=22.04,com.docker.compose.config-hash=923b1625871dffebad0fbb71648efb8f2ecbec5213715727f518ad4e1c43f275,com.docker.compose.container-number=1,com.docker.compose.depends_on=authorization:service_started:false,com.docker.compose.project.environment_file=/home/scientific/app/deploy/.env.production,com.docker.compose.project.working_dir=/home/scientific/app/deploy,com.docker.compose.service=search,com.docker.compose.version=5.5.1,com.docker.compose.image=sha256:8f10c855ceb83ae144e46550f57598b7e7f0737d965cabfb72a0732030618724,com.docker.compose.oneoff=False,com.docker.compose.project=scientific-search,com.docker.compose.project.config_files=/home/scientific/app/deploy/docker-compose.yml,com.docker.compose.replace=search-1","LocalVolumes":"2","Mounts":"scientific-sea…,scientific-sea…","Name":"scientific-search-search-1","Names":"scientific-search-search-1","Networks":"scientific-search_backend","Ports":"8080/tcp","Project":"scientific-search","Publishers":[{"URL":"","TargetPort":8080,"PublishedPort":0,"Protocol":"tcp"}],"RunningFor":"26 hours ago","Service":"search","Size":"0B","State":"running","Status":"Up 26 hours"}
+[database-counts]
+{"sites" : 65, "pages" : 10974, "lemmas" : 230955, "search_index" : 2447508, "assistant_chunks" : 44972}
+[largest-tables]
+page=360 MB
+search_index=279 MB
+assistant_chunk=252 MB
+topic=70 MB
+lemma=29 MB
+topic_group_key_lemmas=2048 kB
+topic_group=280 kB
+indexing_job=128 kB
+[redis]
+PONG
+[authorization-openapi]
+"/api/v1/auth/admin/verify"
+"/api/v1/auth/captcha"
+"/api/v1/auth/change-email-link"
+"/api/v1/auth/change-password-link"
+"/api/v1/auth/login"
+"/api/v1/auth/logout"
+"/api/v1/auth/password/recovery"
+"/api/v1/auth/password/recovery/{token}"
+"/api/v1/auth/refresh"
+"/api/v1/auth/register"
+"/api/v1/auth/validate"
+[email-health]
+{"smtp":"ready","result":true}
+[llm-models]
+{
+  "data": [
+    {
+      "id": "text-embedding-nomic-embed-text-v1.5",
+      "object": "model",
+      "owned_by": "organization_owner"
+    },
+    {
+      "id": "local-qwen3-4b",
+      "object": "model",
+      "owned_by": "organization_owner"
+    },
+    {
+      "id": "qwen/qwen3-4b",
+      "object": "model",
+      "owned_by": "organization_owner"
+    },
+    {
+      "id": "qwen/qwen3-8b",
+      "object": "model",
+      "owned_by": "organization_owner"
+    }
+  ],
+  "object": "list"
+}
+[resource-snapshot]
+{"BlockIO":"4.3MB / 27.3MB","CPUPerc":"0.33%","Container":"d6e305f3c0353f51a97360fafac0be0c90e841f30147e69738ea014da3b0555b","ID":"d6e305f3c035","MemPerc":"8.27%","MemUsage":"988.6MiB / 11.68GiB","Name":"scientific-search-search-1","NetIO":"199MB / 147MB","PIDs":"62"}
+{"BlockIO":"12.6MB / 22MB","CPUPerc":"0.30%","Container":"25c4053583c4f5a144805e52164440000af1533b802542a2c49508cc257718a2","ID":"25c4053583c4","MemPerc":"3.69%","MemUsage":"441.5MiB / 11.68GiB","Name":"scientific-search-authorization-1","NetIO":"2.02MB / 2.68MB","PIDs":"48"}
+{"BlockIO":"19.8MB / 19.5MB","CPUPerc":"0.20%","Container":"fbcbb143fada0edafd5b093fa13fc7b358e68d8c680857795bec1a9d1d0c70ba","ID":"fbcbb143fada","MemPerc":"2.08%","MemUsage":"248.6MiB / 11.68GiB","Name":"scientific-search-email-1","NetIO":"28.6kB / 8.62kB","PIDs":"43"}
+{"BlockIO":"2.54MB / 53.2kB","CPUPerc":"0.00%","Container":"a6c769c6387310569fa3a152c295ad6c7baa619ff22c38ec90ffe1350741cdc8","ID":"a6c769c63873","MemPerc":"0.26%","MemUsage":"31.59MiB / 11.68GiB","Name":"scientific-search-caddy-1","NetIO":"131MB / 37.2MB","PIDs":"14"}
+{"BlockIO":"2.76GB / 477MB","CPUPerc":"1.13%","Container":"09bf1ea774ce46c1299c53362908c8328e3a09c316ae0363c18ed2672acfa356","ID":"09bf1ea774ce","MemPerc":"1.57%","MemUsage":"188.1MiB / 11.68GiB","Name":"scientific-search-database-1","NetIO":"233MB / 37.8GB","PIDs":"29"}
+{"BlockIO":"10.2MB / 2.16MB","CPUPerc":"0.62%","Container":"efb216b5d326afe80038227d577ea5e4d70f5be5bb96bd314825b47377951a32","ID":"efb216b5d326","MemPerc":"0.03%","MemUsage":"3.379MiB / 11.68GiB","Name":"scientific-search-redis-1","NetIO":"16.7kB / 126B","PIDs":"7"}

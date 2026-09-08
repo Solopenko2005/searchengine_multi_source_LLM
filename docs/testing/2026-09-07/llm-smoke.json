@@ -1,0 +1,19 @@
+{
+  "generatedAt": "2026-09-07T17:45:33Z",
+  "passed": true,
+  "status": 200,
+  "model": "local-qwen3-4b",
+  "durationMs": 10478.39,
+  "answer": "Для того чтобы улучшить точность и актуальность ответов на запросы, используя внешние данные и контекст.",
+  "usage": {
+    "input_tokens": 39,
+    "output_tokens": 31,
+    "total_tokens": 70,
+    "input_tokens_details": {
+      "cached_tokens": 3
+    },
+    "output_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

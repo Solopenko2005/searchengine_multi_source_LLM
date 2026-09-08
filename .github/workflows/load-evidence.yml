@@ -1,0 +1,48 @@
+name: Manual Load Test Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      concurrency:
+        description: Concurrent clients (safe public-page profile)
+        required: true
+        type: choice
+        default: "10"
+        options: ["1", "5", "10", "20"]
+      duration:
+        description: Test duration in seconds
+        required: true
+        type: choice
+        default: "15"
+        options: ["10", "15", "30"]
+
+permissions:
+  contents: read
+
+jobs:
+  public-page-load:
+    name: HTTP load - ${{ inputs.concurrency }} clients
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run bounded load test
+        run: >-
+          node scripts/testing/load-test.mjs
+          --base https://search.5-42-117-227.sslip.io/
+          --endpoint /
+          --concurrency ${{ inputs.concurrency }}
+          --duration ${{ inputs.duration }}
+          --credentials-file .ci-no-credentials
+          --output artifacts/load-results.json
+      - name: Upload load evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-evidence-c${{ inputs.concurrency }}-${{ github.run_number }}
+          path: artifacts/load-results.json
+          if-no-files-found: warn
+          retention-days: 90
