@@ -43,15 +43,15 @@ jobs:
         if: always()
         shell: bash
         run: |
-          mkdir -p "../.ci-output/${{ matrix.id }}"
-          if [ -d target/surefire-reports ]; then cp -R target/surefire-reports "../.ci-output/${{ matrix.id }}/surefire"; fi
-          if [ -d target/site/jacoco ]; then cp -R target/site/jacoco "../.ci-output/${{ matrix.id }}/jacoco"; fi
+          mkdir -p "../ci-output/${{ matrix.id }}"
+          if [ -d target/surefire-reports ]; then cp -R target/surefire-reports "../ci-output/${{ matrix.id }}/surefire"; fi
+          if [ -d target/site/jacoco ]; then cp -R target/site/jacoco "../ci-output/${{ matrix.id }}/jacoco"; fi
       - name: Upload test evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-evidence-${{ matrix.id }}
-          path: .ci-output
+          path: ci-output
           if-no-files-found: warn
           retention-days: 90
 
@@ -65,15 +65,15 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: test-evidence-*
-          path: .ci-artifacts
+          path: ci-artifacts
           merge-multiple: true
       - name: Build evidence dashboard
-        run: node scripts/testing/build-ci-dashboard.mjs .ci-artifacts .ci-site
+        run: node scripts/testing/build-ci-dashboard.mjs ci-artifacts ci-site
       - name: Upload dashboard snapshot
         uses: actions/upload-artifact@v4
         with:
           name: quality-site-snapshot
-          path: .ci-site
+          path: ci-site
           retention-days: 90
 
   publish-quality-site:
@@ -92,11 +92,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: quality-site-snapshot
-          path: .ci-site
+          path: ci-site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: .ci-site
+          path: ci-site
       - name: Deploy GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
