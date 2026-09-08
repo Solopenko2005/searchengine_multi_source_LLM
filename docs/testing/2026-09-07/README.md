@@ -45,7 +45,7 @@
 
 ## Доказательства
 
-- [Публичная панель CI/CD и покрытия](https://solopenko2005.github.io/searchengine_multi_source_LLM/)
+- Панель CI/CD и покрытия: артефакт `quality-site-snapshot` в [последнем CI-запуске](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/ci.yml)
 - [Все прогоны CI/CD](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/ci.yml)
 - [Периодические интеграционные прогоны](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/integration-evidence.yml)
 - [Ручной безопасный нагрузочный прогон](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/load-evidence.yml)

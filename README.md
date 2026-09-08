@@ -5,7 +5,7 @@
 
 Публичная доказательная база тестирования:
 
-- [интерактивная панель качества и детальные отчёты JaCoCo](https://solopenko2005.github.io/searchengine_multi_source_LLM/);
+- интерактивная панель качества и детальные отчёты JaCoCo находятся в артефакте `quality-site-snapshot` каждого [CI-запуска](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/ci.yml); GitHub Pages публикует эту же панель автоматически, когда тариф разрешает Pages для репозитория;
 - [журнал CI/CD с каждым запуском и скачиваемыми артефактами](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/ci.yml);
 - [код модульных тестов](https://github.com/Solopenko2005/searchengine_multi_source_LLM/tree/main/Searchengine_1/src/test), [авторизации](https://github.com/Solopenko2005/searchengine_multi_source_LLM/tree/main/authorization/src/test) и [e-mail-сервиса](https://github.com/Solopenko2005/searchengine_multi_source_LLM/tree/main/emailsender/src/test);
 - [код интеграционного и нагрузочного тестирования](https://github.com/Solopenko2005/searchengine_multi_source_LLM/tree/main/scripts/testing);

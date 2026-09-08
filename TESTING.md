@@ -6,12 +6,12 @@
 
 | Что показать | Ссылка |
 |---|---|
-| Интерактивная панель качества и покрытие по модулям | [GitHub Pages](https://solopenko2005.github.io/searchengine_multi_source_LLM/) |
+| Интерактивная панель качества и покрытие по модулям | Артефакт `quality-site-snapshot` в [последнем CI-запуске](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/ci.yml) |
 | История автоматических запусков JUnit, JaCoCo и сборки Docker | [CI and Quality Evidence](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/ci.yml) |
 | Интеграционные проверки production | [Production Integration Evidence](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/integration-evidence.yml) |
 | Ручной ограниченный нагрузочный тест | [Manual Load Test Evidence](https://github.com/Solopenko2005/searchengine_multi_source_LLM/actions/workflows/load-evidence.yml) |
 | Формальный протокол | [TEST_PROTOCOL.md](docs/testing/2026-09-07/TEST_PROTOCOL.md) |
-| Интерактивный зафиксированный отчёт | [report.html](https://solopenko2005.github.io/searchengine_multi_source_LLM/evidence/2026-09-07/report.html) |
+| Интерактивный зафиксированный отчёт | [report.html](docs/testing/2026-09-07/report.html) |
 | Итоговая презентация | [PowerPoint](docs/testing/2026-09-07/Комплексное_тестирование_научной_поисковой_системы_итог.pptx) |
 | База, на которой выполнялся тест | [Карточка набора данных](docs/testing/2026-09-07/database/DATASET_CARD.md) |
 
@@ -53,8 +53,8 @@
 
 1. Каждый push или pull request автоматически запускает три Maven-модуля, формирует JUnit XML и JaCoCo HTML/XML/CSV.
 2. В карточке запуска GitHub Actions доступны логи, статус каждой матрицы и скачиваемые артефакты сроком хранения 90 дней.
-3. После успешной обработки результат публикуется на GitHub Pages, где можно открыть детальное покрытие до класса и строки.
+3. После успешной обработки целиком собранная панель сохраняется в артефакте `quality-site-snapshot`. Если репозиторий публичный или тариф поддерживает Pages для приватного репозитория, она также автоматически публикуется на GitHub Pages.
 4. Интеграционный workflow запускается вручную и еженедельно; он проверяет страницы, API-защиту, captcha и TLS без изменения данных.
 5. Нагрузочный workflow запускается только вручную и ограничен 20 клиентами и 30 секундами в интерфейсе GitHub.
 
-Для отчёта или защиты удобно сделать три скриншота: общий статус последнего CI-запуска, главную панель GitHub Pages и детальную страницу JaCoCo нужного пакета. Численные результаты и ограничения уже оформлены в презентации и формальном протоколе.
+Для отчёта или защиты удобно сделать три скриншота: общий статус последнего CI-запуска, главную страницу скачанного `quality-site-snapshot` и детальную страницу JaCoCo нужного пакета. Численные результаты и ограничения уже оформлены в презентации и формальном протоколе.

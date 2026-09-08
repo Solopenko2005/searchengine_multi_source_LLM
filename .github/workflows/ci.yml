@@ -78,7 +78,7 @@ jobs:
 
   publish-quality-site:
     name: Publish evidence to GitHub Pages
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && github.event.repository.visibility == 'public'
     needs: quality-site
     runs-on: ubuntu-latest
     permissions:
