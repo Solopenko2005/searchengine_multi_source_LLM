@@ -34,7 +34,12 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env.production ex
   wget -qO- http://127.0.0.1:8771/api/v1/email/health
 
 echo
-echo "[llm-models]"
+echo "[llm-generation-health]"
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env.production exec -T search \
+  sh -lc 'wget -qO- --timeout=15 --header="Authorization: Bearer $OPENAI_API_KEY" http://host.docker.internal:1235/health'
+
+echo
+echo "[embedding-models]"
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env.production exec -T search \
   wget -qO- --timeout=15 http://host.docker.internal:1234/v1/models
 

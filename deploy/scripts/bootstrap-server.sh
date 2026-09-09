@@ -74,6 +74,7 @@ ufw allow 80/tcp
 ufw allow 443/tcp
 ufw allow 443/udp
 ufw allow from 172.28.0.0/24 to any port 1234 proto tcp comment 'Scientific Search LLM bridge'
+ufw allow from 172.28.0.0/24 to any port 1235 proto tcp comment 'Scientific Search Qwen bridge'
 ufw --force enable
 
 echo "Server bootstrap completed."

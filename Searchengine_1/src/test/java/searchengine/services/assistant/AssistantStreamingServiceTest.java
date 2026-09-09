@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import searchengine.dto.assistant.ChatRequest;
+import searchengine.dto.assistant.AssistantSource;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +52,27 @@ class AssistantStreamingServiceTest {
         assertThat(queuedTasks).hasSize(2);
         queuedTasks.get(0).run();
         verifyNoInteractions(assistantService, llmClient, metricsService, embeddingIndexCoordinator);
+    }
+
+    @Test
+    void addsTransparentEvidenceListWhenLocalModelOmitsCitations() {
+        AssistantStreamingService service = serviceWithDirectExecutor();
+        List<AssistantSource> sources = List.of(
+                new AssistantSource(1, "Первый", "Журнал", "/one", "Фрагмент"),
+                new AssistantSource(2, "Второй", "Журнал", "/two", "Фрагмент"));
+
+        assertThat(service.citationSuffix("Вывод без ссылки", sources))
+                .isEqualTo("\n\nРелевантные источники для проверки ответа: [1], [2].");
+        assertThat(service.citationSuffix("Подтверждено [2].", sources)).isEmpty();
+        assertThat(service.citationSuffix("Ошибочная ссылка [99].", sources))
+                .contains("[1], [2]");
+    }
+
+    private AssistantStreamingService serviceWithDirectExecutor() {
+        ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
+        return new AssistantStreamingService(mock(AssistantService.class), mock(LlmClient.class),
+                mock(AssistantMetricsService.class), mock(EmbeddingIndexCoordinator.class),
+                Runnable::run, scheduler);
     }
 
     private ChatRequest request(String id) {

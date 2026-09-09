@@ -11,6 +11,7 @@ import searchengine.dto.assistant.ChatRequest;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -19,11 +20,16 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import searchengine.dto.assistant.AssistantSource;
 
 @Service
 @Slf4j
 public class AssistantStreamingService {
     private static final long STREAM_TIMEOUT_MILLIS = 185_000L;
+    private static final Pattern CITATION = Pattern.compile("\\[(\\d+)]");
     private final AssistantService assistantService;
     private final LlmClient llmClient;
     private final AssistantMetricsService metricsService;
@@ -110,6 +116,11 @@ public class AssistantStreamingService {
                 answer.append(delta);
                 send(emitter, "delta", Map.of("text", delta));
             }
+            String citationSuffix = citationSuffix(answer.toString(), preparation.getSources());
+            if (!citationSuffix.isEmpty()) {
+                answer.append(citationSuffix);
+                send(emitter, "delta", Map.of("text", citationSuffix));
+            }
             generationMs = elapsedMillis(generationStartedAt);
             sendDone(emitter, requestId, true, preparation.getRetrievalMs(), generationMs,
                     elapsedMillis(startedAt), preparation.getRetrievalMode());
@@ -158,6 +169,26 @@ public class AssistantStreamingService {
     }
 
     public int activeCount() { return active.size(); }
+
+    /**
+     * A small local model can occasionally omit citation markers despite the
+     * prompt. Keep that answer visible, but add a transparent list of the
+     * retrieved evidence instead of presenting uncited generated text alone.
+     */
+    String citationSuffix(String answer, List<AssistantSource> sources) {
+        if (sources == null || sources.isEmpty()) return "";
+        java.util.Set<Integer> valid = sources.stream()
+                .map(AssistantSource::getIndex)
+                .collect(Collectors.toSet());
+        Matcher matcher = CITATION.matcher(answer == null ? "" : answer);
+        while (matcher.find()) {
+            if (valid.contains(Integer.parseInt(matcher.group(1)))) return "";
+        }
+        String references = sources.stream().limit(8)
+                .map(source -> "[" + source.getIndex() + "]")
+                .collect(Collectors.joining(", "));
+        return "\n\nРелевантные источники для проверки ответа: " + references + ".";
+    }
 
     private void cancelPreviousForOwner(String ownerId) {
         if (ownerId == null || ownerId.isBlank()) return;

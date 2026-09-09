@@ -1,0 +1,24 @@
+[Unit]
+Description=Dedicated Qwen inference server for Scientific Search
+After=network-online.target lmstudio.service
+Wants=network-online.target
+Requires=lmstudio.service
+
+[Service]
+Type=simple
+User=scientific
+Group=scientific
+Environment=HOME=/home/scientific
+EnvironmentFile=/home/scientific/app/deploy/.env.production
+WorkingDirectory=/home/scientific/app
+ExecStart=/home/scientific/app/deploy/scripts/run-llm-inference.sh
+Restart=always
+RestartSec=5
+TimeoutStartSec=180
+TimeoutStopSec=30
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

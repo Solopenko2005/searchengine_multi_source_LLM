@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { performance } from "node:perf_hooks";
+import { randomUUID } from "node:crypto";
 
 function arg(name, fallback) {
   const index = process.argv.indexOf(`--${name}`);
@@ -29,6 +30,14 @@ const baseUrl = arg("base", "https://search.5-42-117-227.sslip.io/");
 const output = path.resolve(arg("output", "docs/testing/latest/rag-load.json"));
 const concurrency = Math.min(2, Math.max(1, Number(arg("concurrency", "1"))));
 const iterations = Math.min(20, Math.max(1, Number(arg("iterations", "5"))));
+const ephemeral = arg("ephemeral", "false").toLowerCase() === "true";
+const inviteFile = arg("invite-file", "");
+const cleanupIdentitiesFile = arg("cleanup-identities", "");
+const sloProfile = arg("slo-profile", "interactive-default");
+const ttftP95LimitMs = Math.max(1, Number(arg("ttft-p95-ms", "5000")));
+const totalP95LimitMs = Math.max(1, Number(arg("total-p95-ms", "20000")));
+const inviteCode = inviteFile && fs.existsSync(path.resolve(inviteFile))
+  ? fs.readFileSync(path.resolve(inviteFile), "utf8").trim() : "";
 const env = { ...parseEnv(path.resolve(arg("credentials-file", ".env"))), ...process.env };
 let credentials = [];
 if (env.TEST_USERS_JSON) {
@@ -38,6 +47,35 @@ if (!credentials.length && (env.TEST_USERNAME || env.APP_ADMIN_USERNAME)
     && (env.TEST_PASSWORD || env.APP_ADMIN_PASSWORD)) {
   credentials = [{ username: env.TEST_USERNAME || env.APP_ADMIN_USERNAME,
     password: env.TEST_PASSWORD || env.APP_ADMIN_PASSWORD }];
+}
+const ephemeralUsers = [];
+if (!credentials.length && ephemeral) {
+  for (let index = 0; index < concurrency; index++) {
+    const username = `rag-evidence-${Date.now()}-${index}-${randomUUID().slice(0, 8)}@example.test`;
+    const password = `Rag!${randomUUID()}aA1`;
+    const registration = await fetch(new URL("/auth-api/api/v1/auth/register", baseUrl), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        firstName: "RAG",
+        lastName: "Evidence",
+        email: username,
+        password1: password,
+        password2: password,
+        role: "USER",
+      }),
+    });
+    if (![200, 201, 204].includes(registration.status)) {
+      throw new Error(`Ephemeral test user registration failed with HTTP ${registration.status}`);
+    }
+    credentials.push({ username, password });
+    ephemeralUsers.push(username);
+  }
+  if (cleanupIdentitiesFile) {
+    const cleanupPath = path.resolve(cleanupIdentitiesFile);
+    fs.mkdirSync(path.dirname(cleanupPath), { recursive: true });
+    fs.writeFileSync(cleanupPath, JSON.stringify(ephemeralUsers));
+  }
 }
 if (credentials.length < concurrency || credentials.some(item => !item.username || !item.password)) {
   console.error("Provide one distinct account per concurrent client via TEST_USERS_JSON, or one TEST_USERNAME/TEST_PASSWORD for concurrency=1");
@@ -88,6 +126,16 @@ async function createSession(credential) {
   const appHtml = await app.text();
   const csrf = metaCsrf(appHtml) || decodeURIComponent(cookieJar.get("XSRF-TOKEN") || "");
   if (app.status !== 200 || !csrf) throw new Error("Authenticated application CSRF token is unavailable");
+  if (inviteCode) {
+    const accepted = await sessionFetch(`/api/groups/invitations/${encodeURIComponent(inviteCode)}/accept`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-XSRF-TOKEN": csrf },
+      body: "{}",
+    });
+    if (accepted.status !== 200) {
+      throw new Error(`Group invitation was not accepted: HTTP ${accepted.status}`);
+    }
+  }
   return { fetch: sessionFetch, csrf };
 }
 
@@ -180,6 +228,9 @@ const report = {
   generatedAt: new Date().toISOString(),
   target: new URL("/api/assistant/chat/stream", baseUrl).toString(),
   profile: "authenticated RAG/SSE, read-only",
+  accountMode: ephemeralUsers.length ? "ephemeral visitor" : "configured test account",
+  inheritedGroupSources: Boolean(inviteCode),
+  sloProfile,
   concurrency,
   iterations,
   summary: {
@@ -195,12 +246,17 @@ const report = {
   thresholds: {
     allResponsesUseLlm: successful === iterations,
     validCitationRateAtLeast80Percent: citationPass / iterations >= 0.8,
-    ttftP95BelowFiveSeconds: percentile(ttft, 95) < 5000,
-    totalP95BelowTwentySeconds: percentile(totals, 95) < 20000,
+    ttftP95LimitMs,
+    totalP95LimitMs,
+    ttftP95WithinSlo: percentile(ttft, 95) <= ttftP95LimitMs,
+    totalP95WithinSlo: percentile(totals, 95) <= totalP95LimitMs,
   },
   samples,
 };
 fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
-if (Object.values(report.thresholds).some(value => !value)) process.exitCode = 1;
+if (!report.thresholds.allResponsesUseLlm
+    || !report.thresholds.validCitationRateAtLeast80Percent
+    || !report.thresholds.ttftP95WithinSlo
+    || !report.thresholds.totalP95WithinSlo) process.exitCode = 1;

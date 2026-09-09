@@ -36,11 +36,13 @@ sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw allow 443/udp
 sudo ufw allow from 172.28.0.0/24 to any port 1234 proto tcp comment 'Scientific Search LLM bridge'
+sudo ufw allow from 172.28.0.0/24 to any port 1235 proto tcp comment 'Scientific Search Qwen bridge'
 sudo ufw enable
 ```
 
-Правило для 1234 разрешает доступ только из закреплённой внутренней Docker-подсети.
-Порт 1234, PostgreSQL, Redis, 5555, 8771 и 8080 открывать в интернет нельзя.
+Правила для 1234 и 1235 разрешают доступ только из закреплённой внутренней
+Docker-подсети. Эти порты, PostgreSQL, Redis, 5555, 8771 и 8080 открывать в
+интернет нельзя.
 
 ## 2. Конфигурация
 
@@ -77,21 +79,22 @@ curl -fsSL https://lmstudio.ai/install.sh | bash
 lms daemon up
 lms get qwen/qwen3-4b@q4_k_m --gguf
 lms get nomic-ai/nomic-embed-text-v1.5@q4_k_m --gguf
-lms load qwen/qwen3-4b --identifier local-qwen3-4b --context-length 4096 --parallel 1 --gpu off --yes
 lms load nomic-ai/nomic-embed-text-v1.5 --identifier text-embedding-nomic-embed-text-v1.5 --yes
 lms server start --port 1234 --bind 0.0.0.0
 ```
 
 Командой `lms ls` проверьте фактические идентификаторы загруженных моделей и при
-необходимости скорректируйте две команды `load`. Сервер слушает сетевой интерфейс,
-чтобы к нему мог обратиться контейнер приложения, но firewall обязан блокировать
-публичный доступ к 1234. Для постоянной работы используйте готовую systemd-службу
-`deploy/systemd/lmstudio.service`, подготовленную по официальной инструкции LM Studio.
+необходимости скорректируйте команду `load`. LM Studio обслуживает только
+embedding-модель на 1234. Qwen3-4B запускается отдельной службой на 1235 с явно
+заданными восемью CPU-потоками. Такое разделение не позволяет фоновой смысловой
+индексации блокировать ответы ассистента. Оба сервера слушают сетевой интерфейс,
+чтобы к ним мог обратиться контейнер приложения, но firewall обязан блокировать
+публичный доступ.
 
 Для CPU-сервера производственная конфигурация ограничивает один запрос ассистента
 шестью наиболее релевантными фрагментами. Для локальной модели сервис дополнительно
-сокращает выдержки примерно до 1 200 символов, весь подготовленный промпт до 3 200
-символов, историю до одной короткой реплики, а обычный ответ до 256 токенов. LM Studio
+сокращает выдержки примерно до 720 символов, весь подготовленный промпт до 3 200
+символов, историю до одной короткой реплики, а обычный ответ до 128 токенов. LM Studio
 обслуживает один интерактивный запрос за раз, чтобы отдельный ответ не замедлялся
 из-за конкурирующих генераций. Лимиты и тайм-аут можно изменить через
 `ASSISTANT_RAG_*`, `OPENAI_MAX_OUTPUT_TOKENS` и `OPENAI_TIMEOUT_SECONDS`, не
@@ -102,9 +105,12 @@ lms server start --port 1234 --bind 0.0.0.0
 смысловая индексация автоматически уступает процессор LLM и затем продолжается.
 
 ```bash
+sudo install -m 0755 deploy/scripts/run-llm-inference.sh /home/scientific/app/deploy/scripts/run-llm-inference.sh
 sudo install -m 0644 deploy/systemd/lmstudio.service /etc/systemd/system/lmstudio.service
+sudo install -m 0644 deploy/systemd/llm-inference.service /etc/systemd/system/llm-inference.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now lmstudio
+sudo systemctl enable --now llm-inference
 ```
 
 ## 4. Запуск и проверка
@@ -120,6 +126,7 @@ docker compose --env-file .env.production logs --tail=200 search authorization e
 
 ```bash
 curl -fsS http://localhost:1234/v1/models
+curl -fsS -H "Authorization: Bearer ${LLM_API_KEY}" http://localhost:1235/v1/models
 curl -I "https://${APP_HOST}/"
 deploy/scripts/verify-production.sh
 ```
