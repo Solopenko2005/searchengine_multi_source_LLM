@@ -15,6 +15,8 @@ import searchengine.services.assistant.AssistantStreamingService;
 import searchengine.services.assistant.AssistantTopicJobService;
 import searchengine.services.assistant.EmbeddingIndexCoordinator;
 import searchengine.services.assistant.AssistantMetricsService;
+import searchengine.services.assistant.LlmClient;
+import searchengine.services.assistant.EmbeddingClient;
 import searchengine.services.CurrentUserService;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.http.HttpHeaders;
@@ -44,6 +46,8 @@ public class AssistantController {
     private final AssistantTopicJobService topicJobService;
     private final EmbeddingIndexCoordinator embeddingIndexCoordinator;
     private final AssistantMetricsService metricsService;
+    private final LlmClient llmClient;
+    private final EmbeddingClient embeddingClient;
     private final CurrentUserService currentUserService;
 
     @PostMapping("/chat")
@@ -113,6 +117,8 @@ public class AssistantController {
         Map<String, Object> result = new HashMap<>(metricsService.snapshot());
         result.put("result", true);
         result.put("activeStreams", streamingService.activeCount());
+        result.put("llm", llmClient.runtimeStatus());
+        result.put("embedding", embeddingClient.runtimeStatus());
         return result;
     }
 
@@ -123,6 +129,7 @@ public class AssistantController {
         map.put("llmConfigured", assistantService.isLlmConfigured());
         map.put("provider", assistantService.getLlmProvider());
         map.put("model", assistantService.getLlmModel());
+        map.put("runtime", llmClient.runtimeStatus());
         return map;
     }
 

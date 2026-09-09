@@ -1,0 +1,57 @@
+name: Authenticated LLM RAG Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      concurrency:
+        description: Concurrent clients (requires one account per client)
+        required: true
+        type: choice
+        default: "1"
+        options: ["1", "2"]
+      iterations:
+        description: Number of end-to-end questions
+        required: true
+        type: choice
+        default: "5"
+        options: ["3", "5", "10"]
+
+permissions:
+  contents: read
+
+jobs:
+  authenticated-rag:
+    name: Retrieval, streaming, LLM and citations
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Verify test credentials are configured
+        env:
+          TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          TEST_USERS_JSON: ${{ secrets.TEST_USERS_JSON }}
+        run: test -n "$TEST_USERS_JSON" || (test -n "$TEST_USERNAME" && test -n "$TEST_PASSWORD")
+      - name: Run authenticated RAG test
+        env:
+          TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          TEST_USERS_JSON: ${{ secrets.TEST_USERS_JSON }}
+        run: >-
+          node scripts/testing/rag-load-test.mjs
+          --base https://search.5-42-117-227.sslip.io/
+          --concurrency ${{ inputs.concurrency }}
+          --iterations ${{ inputs.iterations }}
+          --credentials-file .ci-no-credentials
+          --output artifacts/rag-load.json
+      - name: Upload RAG evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rag-evidence-c${{ inputs.concurrency }}-${{ github.run_number }}
+          path: artifacts/rag-load.json
+          if-no-files-found: warn
+          retention-days: 90

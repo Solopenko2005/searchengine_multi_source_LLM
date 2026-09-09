@@ -116,7 +116,7 @@ public class AssistantService {
             response.setAnswer("В выбранных источниках не нашлось информации по этому вопросу. "
                     + "Попробуйте переформулировать запрос или добавить источники на вкладке «Управление».");
             response.setTotalMs(elapsedMillis(startedAt));
-            metricsService.record(retrievalMs, 0, response.getTotalMs(), false);
+            metricsService.record(retrievalMs, 0, 0, response.getTotalMs(), false, false);
             return response;
         }
 
@@ -132,7 +132,8 @@ public class AssistantService {
                 response.setUsedLlm(true);
                 response.setAnswer(answer);
                 response.setTotalMs(elapsedMillis(startedAt));
-                metricsService.record(retrievalMs, response.getGenerationMs(), response.getTotalMs(), false);
+                metricsService.record(retrievalMs, response.getGenerationMs(), response.getGenerationMs(),
+                        response.getTotalMs(), false, false);
                 return response;
             } catch (Exception e) {
                 logger.warn("LLM недоступна, переходим в резервный режим: {}", e.getMessage());
@@ -141,7 +142,8 @@ public class AssistantService {
                 response.setAnswer(fallbackAnswer(docs,
                         "Языковая модель временно недоступна."));
                 response.setTotalMs(elapsedMillis(startedAt));
-                metricsService.record(retrievalMs, response.getGenerationMs(), response.getTotalMs(), true);
+                metricsService.record(retrievalMs, response.getGenerationMs(), response.getGenerationMs(),
+                        response.getTotalMs(), true, true);
                 return response;
             }
         }
@@ -153,7 +155,7 @@ public class AssistantService {
                 "Языковая модель не подключена. Укажите assistant.llm.api-key в application.yml "
                         + "(или переменную окружения OPENAI_API_KEY), чтобы получать развёрнутые ответы."));
         response.setTotalMs(elapsedMillis(startedAt));
-        metricsService.record(retrievalMs, 0, response.getTotalMs(), false);
+        metricsService.record(retrievalMs, 0, 0, response.getTotalMs(), false, true);
         return response;
     }
 
@@ -379,11 +381,14 @@ public class AssistantService {
         }
         Map<Integer, Page> pagesById = pageRepository.findAllById(rankedPageIds).stream()
                 .collect(Collectors.toMap(Page::getId, Function.identity()));
+        List<Page> accessibleRanked = rankedPageIds.stream().map(pagesById::get)
+                .filter(java.util.Objects::nonNull)
+                .filter(page -> page.getContent() != null && currentUserService.canAccess(page))
+                .toList();
+        List<Page> selectedPages = selectSourceBalancedPages(accessibleRanked, maxDocs);
         int index = 1;
-        for (Integer pageId : rankedPageIds) {
-            Page page = pagesById.get(pageId);
-            if (page == null || page.getContent() == null || !currentUserService.canAccess(page)) continue;
-            AssistantChunk semanticChunk = bestChunkByPage.get(pageId);
+        for (Page page : selectedPages) {
+            AssistantChunk semanticChunk = bestChunkByPage.get(page.getId());
             RetrievedDoc doc = toRetrievedDoc(page, question, maxChars, index,
                     semanticChunk == null ? null : semanticChunk.getContent());
             if (doc == null) continue;
@@ -408,7 +413,7 @@ public class AssistantService {
                 currentUserService.accessibleOwnerIds(), currentUserService.isAdmin(),
                 PageRequest.of(0, maxDocs * 2));
         int index = 1;
-        for (Page page : pages) {
+        for (Page page : selectSourceBalancedPages(pages, maxDocs)) {
             RetrievedDoc doc = toRetrievedDoc(page, question, maxChars, index, null);
             if (doc == null) continue;
             docs.add(doc);
@@ -416,6 +421,31 @@ public class AssistantService {
             if (docs.size() >= maxDocs) break;
         }
         return docs;
+    }
+
+    private List<Page> selectSourceBalancedPages(List<Page> rankedPages, int maximum) {
+        if (rankedPages == null || rankedPages.isEmpty()) return List.of();
+        int perSource = Math.max(1, config.getRag().getMaxDocumentsPerSource());
+        List<Page> selected = new ArrayList<>();
+        List<Page> overflow = new ArrayList<>();
+        Map<Integer, Integer> counts = new LinkedHashMap<>();
+        for (Page page : rankedPages) {
+            if (page == null || page.getSite() == null) continue;
+            int siteId = page.getSite().getId();
+            int count = counts.getOrDefault(siteId, 0);
+            if (count < perSource) {
+                selected.add(page);
+                counts.put(siteId, count + 1);
+            } else {
+                overflow.add(page);
+            }
+            if (selected.size() >= maximum) return selected;
+        }
+        for (Page page : overflow) {
+            selected.add(page);
+            if (selected.size() >= maximum) break;
+        }
+        return selected;
     }
 
     private RetrievedDoc toRetrievedDoc(Page page, String question, int maxChars, int index) {

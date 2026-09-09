@@ -28,7 +28,9 @@ public class AssistantAsyncConfig {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(2);
         executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(50);
+        // Генерация ограничена отдельно в LlmClient; короткая очередь не даёт
+        // десяткам HTTP-запросов незаметно ждать несколько минут.
+        executor.setQueueCapacity(8);
         executor.setThreadNamePrefix("assistant-request-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(10);

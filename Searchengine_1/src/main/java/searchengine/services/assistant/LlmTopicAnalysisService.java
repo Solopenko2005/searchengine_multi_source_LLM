@@ -73,7 +73,7 @@ public class LlmTopicAnalysisService {
         }
 
         Map<Integer, Page> rootPageBySite = resolveRootPages(sites, ownerIds, includeLegacy);
-        Map<Integer, String> excerptBySite = loadRootPageExcerpts(rootPageBySite);
+        Map<Integer, String> excerptBySite = loadRepresentativeExcerpts(sites, rootPageBySite);
         List<SourceEvidence> evidence = new ArrayList<>();
         int index = 1;
         for (Site site : sites) {
@@ -199,26 +199,57 @@ public class LlmTopicAnalysisService {
         return result;
     }
 
-    private Map<Integer, String> loadRootPageExcerpts(Map<Integer, Page> rootPageBySite) {
+    private Map<Integer, String> loadRepresentativeExcerpts(List<Site> sites,
+                                                              Map<Integer, Page> rootPageBySite) {
         Map<Integer, List<AssistantChunk>> chunksBySite = new LinkedHashMap<>();
+        List<Integer> siteIds = sites.stream().map(Site::getId).toList();
+        if (!siteIds.isEmpty()) {
+            List<Long> ids = chunkRepository.findRepresentativeReadyIds(siteIds, 4,
+                    Math.max(4, siteIds.size() * 4));
+            if (ids != null && !ids.isEmpty()) {
+                List<AssistantChunk> representative = chunkRepository.findReadyWithPageByIds(
+                        ids, AssistantChunkStatus.READY);
+                if (representative != null) {
+                    for (AssistantChunk chunk : representative) {
+                        if (chunk.getContent() != null && !chunk.getContent().isBlank()) {
+                            chunksBySite.computeIfAbsent(chunk.getSiteId(), ignored -> new ArrayList<>())
+                                    .add(chunk);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Совместимость с ещё не достроенным смысловым индексом: источник уже
+        // участвует в тематическом анализе по исходной странице.
         if (!rootPageBySite.isEmpty()) {
-            List<Integer> pageIds = rootPageBySite.values().stream().map(Page::getId).toList();
-            for (AssistantChunk chunk : chunkRepository.findByPageIdsWithPage(
-                    pageIds, AssistantChunkStatus.READY)) {
-                if (chunk.getContent() != null && !chunk.getContent().isBlank()) {
-                    chunksBySite.computeIfAbsent(chunk.getSiteId(), ignored -> new ArrayList<>()).add(chunk);
+            List<Integer> missingPageIds = rootPageBySite.entrySet().stream()
+                    .filter(entry -> !chunksBySite.containsKey(entry.getKey()))
+                    .map(entry -> entry.getValue().getId()).toList();
+            if (!missingPageIds.isEmpty()) {
+                List<AssistantChunk> rootChunks = chunkRepository.findByPageIdsWithPage(
+                        missingPageIds, AssistantChunkStatus.READY);
+                if (rootChunks != null) {
+                    for (AssistantChunk chunk : rootChunks) {
+                        if (chunk.getContent() != null && !chunk.getContent().isBlank()) {
+                            chunksBySite.computeIfAbsent(chunk.getSiteId(), ignored -> new ArrayList<>())
+                                    .add(chunk);
+                        }
+                    }
                 }
             }
         }
         Map<Integer, String> result = new LinkedHashMap<>();
-        for (Map.Entry<Integer, Page> entry : rootPageBySite.entrySet()) {
-            List<AssistantChunk> chunks = chunksBySite.getOrDefault(entry.getKey(), List.of());
+        for (Site site : sites) {
+            Page rootPage = rootPageBySite.get(site.getId());
+            List<AssistantChunk> chunks = chunksBySite.getOrDefault(site.getId(), List.of());
             String content = chunks.stream()
                     .max(Comparator.comparingInt(this::topicSignalScore))
                     .map(AssistantChunk::getContent)
-                    .orElseGet(() -> Jsoup.parse(entry.getValue().getContent()).text());
+                    .orElseGet(() -> rootPage == null ? ""
+                            : Jsoup.parse(rootPage.getContent() == null ? "" : rootPage.getContent()).text());
             String excerpt = compactEvidence(content);
-            if (!excerpt.isBlank()) result.put(entry.getKey(), excerpt);
+            if (!excerpt.isBlank()) result.put(site.getId(), excerpt);
         }
         return result;
     }
@@ -241,11 +272,21 @@ public class LlmTopicAnalysisService {
         for (int i = 0; i < evidence.size(); i++) {
             if (!excerptOrder.contains(i)) excerptOrder.add(i);
         }
+        long excerptCount = excerptOrder.stream()
+                .filter(position -> evidence.get(position).excerpt() != null
+                        && !evidence.get(position).excerpt().isBlank())
+                .count();
+        int remainingBudget = Math.max(0, budget - catalog.length());
+        int fairExcerptLimit = excerptCount == 0 ? 0
+                : Math.max(24, Math.min(LOCAL_EXCERPT_CHARS,
+                remainingBudget / (int) excerptCount - 8));
         for (Integer position : excerptOrder) {
             String excerpt = evidence.get(position).excerpt();
             if (excerpt == null || excerpt.isBlank()) continue;
-            String line = "S" + (position + 1) + ": " + truncate(excerpt, LOCAL_EXCERPT_CHARS) + "\n";
-            if (catalog.length() + line.length() > budget) break;
+            int available = budget - catalog.length() - 8;
+            if (available <= 20) break;
+            String line = "S" + (position + 1) + ": "
+                    + truncate(excerpt, Math.min(fairExcerptLimit, available)) + "\n";
             catalog.append(line);
         }
         return truncate(catalog.toString(), budget);

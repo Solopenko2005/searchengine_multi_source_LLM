@@ -85,13 +85,20 @@ assistant:
     reasoning-effort: ${OPENAI_REASONING_EFFORT:low}
     max-output-tokens: ${OPENAI_MAX_OUTPUT_TOKENS:1600}
     timeout-seconds: ${OPENAI_TIMEOUT_SECONDS:60}
-    retry-attempts: 3
+    retry-attempts: ${OPENAI_RETRY_ATTEMPTS:2}
+    max-concurrent-requests: ${OPENAI_MAX_CONCURRENT_REQUESTS:2}
+    queue-timeout-millis: ${OPENAI_QUEUE_TIMEOUT_MILLIS:500}
+    circuit-failure-threshold: ${OPENAI_CIRCUIT_FAILURE_THRESHOLD:3}
+    circuit-cooldown-seconds: ${OPENAI_CIRCUIT_COOLDOWN_SECONDS:30}
+    response-cache-ttl-seconds: ${OPENAI_RESPONSE_CACHE_TTL_SECONDS:300}
+    response-cache-max-entries: ${OPENAI_RESPONSE_CACHE_MAX_ENTRIES:500}
   rag:
     max-documents: ${ASSISTANT_RAG_MAX_DOCUMENTS:15}
     max-chars-per-document: ${ASSISTANT_RAG_MAX_CHARS_PER_DOCUMENT:2400}
     max-history-messages: 8
     max-input-chars: ${ASSISTANT_RAG_MAX_INPUT_CHARS:50000}
     local-context-chars: ${ASSISTANT_RAG_LOCAL_CONTEXT_CHARS:1200}
+    max-documents-per-source: ${ASSISTANT_RAG_MAX_DOCUMENTS_PER_SOURCE:2}
     topic-document-limit: ${ASSISTANT_TOPIC_DOCUMENT_LIMIT:80}
     topic-min-confidence: ${OPENAI_TOPIC_MIN_CONFIDENCE:0.65}
     candidate-documents: ${ASSISTANT_RAG_CANDIDATES:64}
@@ -107,6 +114,18 @@ assistant:
     scan-delay-millis: ${ASSISTANT_EMBEDDING_SCAN_DELAY_MS:1000}
     timeout-seconds: ${ASSISTANT_EMBEDDING_TIMEOUT_SECONDS:60}
     index-path: ${ASSISTANT_VECTOR_INDEX_PATH:data/assistant-vectors}
+    query-cache-ttl-seconds: ${ASSISTANT_QUERY_CACHE_TTL_SECONDS:900}
+    query-cache-max-entries: ${ASSISTANT_QUERY_CACHE_MAX_ENTRIES:1000}
+    auto-retry-failed: ${ASSISTANT_EMBEDDING_AUTO_RETRY_FAILED:true}
+    failed-retry-delay-seconds: ${ASSISTANT_EMBEDDING_RETRY_DELAY_SECONDS:300}
+  slo:
+    sample-window: ${ASSISTANT_SLO_SAMPLE_WINDOW:512}
+    minimum-samples: ${ASSISTANT_SLO_MINIMUM_SAMPLES:10}
+    retrieval-p95-millis: ${ASSISTANT_SLO_RETRIEVAL_P95_MS:2000}
+    time-to-first-token-p95-millis: ${ASSISTANT_SLO_TTFT_P95_MS:5000}
+    total-p95-millis: ${ASSISTANT_SLO_TOTAL_P95_MS:20000}
+    maximum-failure-rate: ${ASSISTANT_SLO_MAX_FAILURE_RATE:0.01}
+    maximum-fallback-rate: ${ASSISTANT_SLO_MAX_FALLBACK_RATE:0.01}
 
 app:
   docs:

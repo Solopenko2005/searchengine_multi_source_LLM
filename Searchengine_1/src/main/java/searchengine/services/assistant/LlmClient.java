@@ -15,11 +15,18 @@ import searchengine.config.assistant.AssistantConfig;
 import searchengine.dto.assistant.ChatMessage;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import org.springframework.security.core.Authentication;
@@ -36,12 +43,20 @@ public class LlmClient {
     private final AssistantConfig config;
     private final ObjectMapper objectMapper;
     private final WebClient.Builder webClientBuilder;
+    private final Semaphore generationSlots;
+    private final AtomicInteger inFlight = new AtomicInteger();
+    private final AtomicInteger consecutiveFailures = new AtomicInteger();
+    private final AtomicLong circuitOpenUntilMillis = new AtomicLong();
+    private final ConcurrentHashMap<String, CachedResponse> responseCache = new ConcurrentHashMap<>();
+    private final LongAdder cacheHits = new LongAdder();
+    private final LongAdder cacheMisses = new LongAdder();
 
     public LlmClient(AssistantConfig config, ObjectMapper objectMapper,
                      WebClient.Builder webClientBuilder) {
         this.config = config;
         this.objectMapper = objectMapper;
         this.webClientBuilder = webClientBuilder;
+        this.generationSlots = new Semaphore(Math.max(1, config.getLlm().getMaxConcurrentRequests()), true);
     }
 
     public boolean isConfigured() {
@@ -78,34 +93,43 @@ public class LlmClient {
         if (!isConfigured()) return Flux.error(new LlmException("OpenAI API не настроен"));
         Map<String, Object> body = buildRequest(messages, null, null);
         body.put("stream", true);
+        String requestCacheKey = cacheKey(body);
         AssistantConfig.Llm llm = config.getLlm();
-        WebClient webClient = webClientBuilder
-                .baseUrl(trimTrailingSlash(llm.getBaseUrl()))
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + llm.getApiKey())
-                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .defaultHeader(HttpHeaders.ACCEPT, MediaType.TEXT_EVENT_STREAM_VALUE)
-                .build();
-        return webClient.post().uri("/responses").bodyValue(body).retrieve()
-                .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
-                .handle((event, sink) -> {
-                    String data = event.data();
-                    if (data == null || data.isBlank() || "[DONE]".equals(data)) return;
-                    try {
-                        JsonNode node = objectMapper.readTree(data);
-                        String type = node.path("type").asText();
-                        if ("response.output_text.delta".equals(type)) {
-                            String delta = node.path("delta").asText();
-                            if (!delta.isEmpty()) sink.next(delta);
-                        } else if ("response.failed".equals(type)) {
-                            sink.error(new LlmException(node.path("response").path("error")
-                                    .path("message").asText("Генерация завершилась ошибкой")));
-                        }
-                    } catch (Exception exception) {
-                        sink.error(new LlmException("Не удалось разобрать потоковый ответ", exception));
-                    }
-                })
-                .cast(String.class)
-                .timeout(Duration.ofSeconds(Math.max(5, llm.getTimeoutSeconds())));
+        return Flux.defer(() -> {
+                    String cached = cachedResponse(requestCacheKey);
+                    if (cached != null) return Flux.just(cached);
+                    acquireGenerationSlot();
+                    StringBuilder completedText = new StringBuilder();
+                    WebClient webClient = webClient(MediaType.TEXT_EVENT_STREAM_VALUE);
+                    return webClient.post().uri("/responses").bodyValue(body).retrieve()
+                            .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
+                            .handle((event, sink) -> {
+                                String data = event.data();
+                                if (data == null || data.isBlank() || "[DONE]".equals(data)) return;
+                                try {
+                                    JsonNode node = objectMapper.readTree(data);
+                                    String type = node.path("type").asText();
+                                    if ("response.output_text.delta".equals(type)) {
+                                        String delta = node.path("delta").asText();
+                                        if (!delta.isEmpty()) sink.next(delta);
+                                    } else if ("response.failed".equals(type)) {
+                                        sink.error(new LlmException(node.path("response").path("error")
+                                                .path("message").asText("Генерация завершилась ошибкой")));
+                                    }
+                                } catch (Exception exception) {
+                                    sink.error(new LlmException("Не удалось разобрать потоковый ответ", exception));
+                                }
+                            })
+                            .cast(String.class)
+                            .timeout(Duration.ofSeconds(Math.max(5, llm.getTimeoutSeconds())))
+                            .doOnNext(completedText::append)
+                            .doOnComplete(() -> {
+                                recordProviderSuccess();
+                                cacheResponse(requestCacheKey, completedText.toString());
+                            })
+                            .doOnError(this::recordProviderFailure)
+                            .doFinally(signal -> releaseGenerationSlot());
+                });
     }
 
     private Map<String, Object> buildRequest(List<ChatMessage> messages,
@@ -210,18 +234,33 @@ public class LlmClient {
             throw new LlmException("OpenAI API не настроен");
         }
 
+        String cacheKey = cacheKey(body);
+        String cached = cachedResponse(cacheKey);
+        if (cached != null) return cached;
+
+        acquireGenerationSlot();
+        try {
+            String result = executeWithRetries(body);
+            recordProviderSuccess();
+            cacheResponse(cacheKey, result);
+            return result;
+        } catch (RuntimeException exception) {
+            recordProviderFailure(exception);
+            throw exception;
+        } finally {
+            releaseGenerationSlot();
+        }
+    }
+
+    private String executeWithRetries(Map<String, Object> body) {
         AssistantConfig.Llm llm = config.getLlm();
+
         int attempts = Math.max(1, llm.getRetryAttempts());
         RuntimeException lastError = null;
 
         for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
-                WebClient webClient = webClientBuilder
-                        .baseUrl(trimTrailingSlash(llm.getBaseUrl()))
-                        .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + llm.getApiKey())
-                        .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                        .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
-                        .build();
+                WebClient webClient = webClient(MediaType.APPLICATION_JSON_VALUE);
 
                 String responseBody = webClient.post()
                         .uri("/responses")
@@ -248,6 +287,121 @@ public class LlmClient {
             }
         }
         throw lastError != null ? lastError : new LlmException("Не удалось получить ответ OpenAI API");
+    }
+
+    public Map<String, Object> runtimeStatus() {
+        long now = System.currentTimeMillis();
+        long openUntil = circuitOpenUntilMillis.get();
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("configured", isConfigured());
+        status.put("provider", isLocalProvider() ? "local" : "remote");
+        status.put("model", getConfiguredModel());
+        status.put("circuit", openUntil > now ? "open" : "closed");
+        status.put("circuitRetryAt", openUntil > now ? Instant.ofEpochMilli(openUntil).toString() : null);
+        status.put("consecutiveFailures", consecutiveFailures.get());
+        status.put("inFlight", inFlight.get());
+        status.put("maxConcurrent", Math.max(1, config.getLlm().getMaxConcurrentRequests()));
+        status.put("cacheEntries", responseCache.size());
+        status.put("cacheHits", cacheHits.sum());
+        status.put("cacheMisses", cacheMisses.sum());
+        return status;
+    }
+
+    private WebClient webClient(String accept) {
+        AssistantConfig.Llm llm = config.getLlm();
+        return webClientBuilder
+                .baseUrl(trimTrailingSlash(llm.getBaseUrl()))
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + llm.getApiKey())
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .defaultHeader(HttpHeaders.ACCEPT, accept)
+                .build();
+    }
+
+    private void acquireGenerationSlot() {
+        long now = System.currentTimeMillis();
+        long openUntil = circuitOpenUntilMillis.get();
+        if (openUntil > now) {
+            throw new LlmException("Языковая модель восстанавливается после ошибок; повторите запрос через "
+                    + Math.max(1, (openUntil - now + 999) / 1000) + " с");
+        }
+        if (openUntil > 0) circuitOpenUntilMillis.compareAndSet(openUntil, 0);
+        try {
+            boolean acquired = generationSlots.tryAcquire(
+                    Math.max(0, config.getLlm().getQueueTimeoutMillis()), TimeUnit.MILLISECONDS);
+            if (!acquired) {
+                throw new LlmException("Языковая модель занята; повторите запрос через несколько секунд");
+            }
+            inFlight.incrementAndGet();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new LlmException("Ожидание языковой модели прервано", exception);
+        }
+    }
+
+    private void releaseGenerationSlot() {
+        inFlight.updateAndGet(value -> Math.max(0, value - 1));
+        generationSlots.release();
+    }
+
+    private void recordProviderSuccess() {
+        consecutiveFailures.set(0);
+        circuitOpenUntilMillis.set(0);
+    }
+
+    private void recordProviderFailure(Throwable error) {
+        if (error instanceof LlmException
+                && error.getMessage() != null
+                && (error.getMessage().contains("занята") || error.getMessage().contains("восстанавливается"))) {
+            return;
+        }
+        int failures = consecutiveFailures.incrementAndGet();
+        int threshold = Math.max(1, config.getLlm().getCircuitFailureThreshold());
+        if (failures >= threshold) {
+            circuitOpenUntilMillis.set(System.currentTimeMillis()
+                    + Math.max(1, config.getLlm().getCircuitCooldownSeconds()) * 1000L);
+        }
+    }
+
+    private String cachedResponse(String key) {
+        CachedResponse cached = responseCache.get(key);
+        if (cached == null) {
+            cacheMisses.increment();
+            return null;
+        }
+        if (cached.expiresAtMillis() <= System.currentTimeMillis()) {
+            responseCache.remove(key, cached);
+            cacheMisses.increment();
+            return null;
+        }
+        cacheHits.increment();
+        return cached.text();
+    }
+
+    private void cacheResponse(String key, String response) {
+        int maxEntries = Math.max(0, config.getLlm().getResponseCacheMaxEntries());
+        int ttlSeconds = Math.max(0, config.getLlm().getResponseCacheTtlSeconds());
+        if (maxEntries == 0 || ttlSeconds == 0 || response == null || response.isBlank()) return;
+        if (responseCache.size() >= maxEntries) {
+            long now = System.currentTimeMillis();
+            responseCache.entrySet().removeIf(entry -> entry.getValue().expiresAtMillis() <= now);
+            if (responseCache.size() >= maxEntries) {
+                responseCache.keySet().stream().findAny().ifPresent(responseCache::remove);
+            }
+        }
+        responseCache.put(key, new CachedResponse(response,
+                System.currentTimeMillis() + ttlSeconds * 1000L));
+    }
+
+    private String cacheKey(Map<String, Object> body) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(objectMapper.writeValueAsBytes(body));
+            StringBuilder key = new StringBuilder();
+            for (byte value : digest) key.append(String.format("%02x", value));
+            return key.toString();
+        } catch (Exception exception) {
+            throw new LlmException("Не удалось подготовить запрос к языковой модели", exception);
+        }
     }
 
     private String extractOutputText(String responseBody) {
@@ -364,5 +518,8 @@ public class LlmClient {
         public LlmException(String message, Throwable cause) {
             super(message, cause);
         }
+    }
+
+    private record CachedResponse(String text, long expiresAtMillis) {
     }
 }

@@ -140,6 +140,46 @@ class LlmTopicAnalysisServiceTest {
         assertThat(prompt).contains("S1 | веб-источник", "S40 | веб-источник");
     }
 
+    @Test
+    void usesRepresentativeChunkFromDeepPageInsteadOfRootNavigation() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new TestingAuthenticationToken("alice", "n/a", "ROLE_USER"));
+        LlmClient client = mock(LlmClient.class);
+        when(client.isConfigured()).thenReturn(true);
+        when(client.isLocalProvider()).thenReturn(true);
+        when(client.completeJson(any(), anyString(), any())).thenReturn("""
+                {"summary":"Обзор","topics":[
+                  {"theme":"Прогнозирование урожайности","description":"Модели прогноза",\
+                   "confidence":0.93,"documentIndexes":[1]}
+                ]}
+                """);
+        Page root = document();
+        root.setContent("<html><body>Войти Регистрация Подписки Правила для авторов</body></html>");
+        AssistantChunk deepResearch = chunk(99L,
+                "Цель исследования состоит в прогнозировании урожайности пшеницы. "
+                        + "Методы исследования используют машинное обучение и погодные данные. "
+                        + "Результаты показали снижение ошибки прогноза.");
+        AssistantChunkRepository chunks = mock(AssistantChunkRepository.class);
+        when(chunks.findRepresentativeReadyIds(any(), anyInt(), anyInt())).thenReturn(List.of(99L));
+        when(chunks.findReadyWithPageByIds(any(), any(AssistantChunkStatus.class)))
+                .thenReturn(List.of(deepResearch));
+        PageRepository pages = mock(PageRepository.class);
+        when(pages.findBySiteAndPath(anyInt(), anyString())).thenReturn(Optional.of(root));
+        SiteRepository sites = mock(SiteRepository.class);
+        when(sites.findAllById(any())).thenReturn(List.of(root.getSite()));
+        LlmTopicAnalysisService service = new LlmTopicAnalysisService(client, new AssistantConfig(),
+                pages, sites, new ObjectMapper(),
+                new CurrentUserService(mock(WorkspaceMembershipRepository.class)), chunks);
+
+        service.analyze(List.of(10), "Агрономия").orElseThrow();
+
+        ArgumentCaptor<List<ChatMessage>> messages = ArgumentCaptor.forClass(List.class);
+        verify(client).completeJson(messages.capture(), anyString(), any());
+        assertThat(messages.getValue().get(1).getContent())
+                .contains("прогнозировании урожайности", "машинное обучение")
+                .doesNotContain("Войти Регистрация Подписки");
+    }
+
     private Page document() {
         Site site = new Site();
         site.setId(10);

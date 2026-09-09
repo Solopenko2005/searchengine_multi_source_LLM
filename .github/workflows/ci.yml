@@ -39,6 +39,15 @@ jobs:
           cache-dependency-path: ${{ matrix.module }}/pom.xml
       - name: Run tests and build coverage report
         run: mvn --batch-mode --no-transfer-progress verify
+      - name: Enforce critical LLM/RAG coverage
+        if: matrix.id == 'search'
+        run: node ../scripts/testing/check-llm-coverage.mjs target/site/jacoco/jacoco.csv
+      - name: Enforce authorization coverage
+        if: matrix.id == 'authorization'
+        run: node ../scripts/testing/check-module-coverage.mjs target/site/jacoco/jacoco.csv 50 authorization
+      - name: Enforce e-mail coverage
+        if: matrix.id == 'email'
+        run: node ../scripts/testing/check-module-coverage.mjs target/site/jacoco/jacoco.csv 60 email
       - name: Collect machine-readable evidence
         if: always()
         shell: bash

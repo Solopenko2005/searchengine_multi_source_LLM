@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 import searchengine.model.AssistantChunk;
 import searchengine.model.AssistantChunkStatus;
 
@@ -57,6 +58,7 @@ public interface AssistantChunkRepository extends JpaRepository<AssistantChunk, 
                                                  @Param("statuses") Collection<AssistantChunkStatus> statuses);
 
     @Modifying
+    @Transactional
     @Query("UPDATE AssistantChunk c SET c.status = :pending, c.errorMessage = null " +
             "WHERE c.status = :failed")
     int resetFailed(@Param("failed") AssistantChunkStatus failed,

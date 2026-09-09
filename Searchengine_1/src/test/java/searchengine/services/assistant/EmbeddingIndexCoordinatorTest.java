@@ -21,6 +21,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 class EmbeddingIndexCoordinatorTest {
 
@@ -83,5 +84,43 @@ class EmbeddingIndexCoordinatorTest {
             assertThat(marker.getPage().getId()).isEqualTo(7);
         });
         verify(embeddings, never()).embedDocuments(any());
+    }
+
+    @Test
+    void automaticallyRetriesFailedChunksAfterQueueIsDrained() {
+        AssistantConfig config = new AssistantConfig();
+        config.getEmbedding().setAutoRetryFailed(true);
+        PageRepository pages = mock(PageRepository.class);
+        AssistantChunkRepository chunks = mock(AssistantChunkRepository.class);
+        EmbeddingClient embeddings = mock(EmbeddingClient.class);
+        LocalVectorIndexService vectorIndex = mock(LocalVectorIndexService.class);
+        Page page = new Page();
+        page.setId(8);
+        Site site = new Site();
+        site.setId(4);
+        page.setSite(site);
+        AssistantChunk failed = new AssistantChunk();
+        failed.setId(11L);
+        failed.setPage(page);
+        failed.setSiteId(4);
+        failed.setContent("Научный текст для повторной смысловой индексации");
+        failed.setStatus(AssistantChunkStatus.PENDING);
+        when(chunks.findByStatusOrderByIdAsc(any(), any(Pageable.class)))
+                .thenReturn(List.of(), List.of(failed));
+        when(pages.findIdsWithoutAssistantChunks(any(Pageable.class))).thenReturn(List.of());
+        when(chunks.countByStatus(AssistantChunkStatus.FAILED)).thenReturn(1L);
+        when(chunks.resetFailed(AssistantChunkStatus.FAILED, AssistantChunkStatus.PENDING)).thenReturn(1);
+        when(embeddings.embedDocuments(any())).thenReturn(List.of(new float[]{1f, 0f}));
+        when(embeddings.model()).thenReturn("test-embedding");
+        when(chunks.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        EmbeddingIndexCoordinator coordinator = new EmbeddingIndexCoordinator(config, pages, chunks,
+                new TextChunker(config), embeddings, vectorIndex, Runnable::run);
+
+        coordinator.scanNow();
+
+        verify(chunks).resetFailed(AssistantChunkStatus.FAILED, AssistantChunkStatus.PENDING);
+        verify(chunks, times(2)).findByStatusOrderByIdAsc(any(), any(Pageable.class));
+        verify(vectorIndex).upsertAll(any());
+        assertThat(failed.getStatus()).isEqualTo(AssistantChunkStatus.READY);
     }
 }

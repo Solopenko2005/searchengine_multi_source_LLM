@@ -18,6 +18,7 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.RejectedExecutionException;
 
 @Service
 @Slf4j
@@ -63,7 +64,15 @@ public class AssistantStreamingService {
         emitter.onCompletion(() -> remove(requestId, false));
         emitter.onTimeout(() -> remove(requestId, true));
         emitter.onError(error -> remove(requestId, true));
-        executor.execute(task);
+        try {
+            executor.execute(task);
+        } catch (RejectedExecutionException overloaded) {
+            active.remove(requestId);
+            activeRequest.cancelHeartbeat();
+            safeSend(emitter, "error", Map.of("message",
+                    "Ассистент занят: запросов слишком много. Повторите через несколько секунд."));
+            emitter.complete();
+        }
         return emitter;
     }
 
@@ -71,8 +80,10 @@ public class AssistantStreamingService {
                          SseEmitter emitter) {
         long startedAt = System.nanoTime();
         long generationMs = 0;
+        long timeToFirstTokenMs = 0;
         AssistantService.StreamPreparation preparation = null;
         boolean failed = false;
+        boolean fallback = false;
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);
@@ -95,6 +106,7 @@ public class AssistantStreamingService {
             StringBuilder answer = new StringBuilder();
             for (String delta : llmClient.stream(preparation.getMessages()).toIterable()) {
                 if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
+                if (timeToFirstTokenMs == 0) timeToFirstTokenMs = elapsedMillis(generationStartedAt);
                 answer.append(delta);
                 send(emitter, "delta", Map.of("text", delta));
             }
@@ -113,12 +125,14 @@ public class AssistantStreamingService {
             log.warn("Потоковый запрос LLM {} завершился ошибкой: {}",
                     requestId, safeMessage(exception), exception);
             if (preparation != null && preparation.getFallbackAnswer() != null) {
+                fallback = true;
                 safeSend(emitter, "delta", Map.of("text", preparation.getFallbackAnswer()));
             }
             safeSend(emitter, "error", Map.of("message", safeMessage(exception)));
         } finally {
             long retrievalMs = preparation == null ? 0 : preparation.getRetrievalMs();
-            metricsService.record(retrievalMs, generationMs, elapsedMillis(startedAt), failed);
+            metricsService.record(retrievalMs, generationMs, timeToFirstTokenMs,
+                    elapsedMillis(startedAt), failed, fallback);
             ActiveRequest finished = active.remove(requestId);
             if (finished != null) finished.cancelHeartbeat();
             try { emitter.complete(); } catch (Exception ignored) { }

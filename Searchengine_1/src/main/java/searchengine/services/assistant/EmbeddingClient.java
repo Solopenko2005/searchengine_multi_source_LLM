@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.LongAdder;
 
 /** OpenAI-compatible embedding client used by LM Studio without paid tokens. */
 @Component
@@ -23,6 +25,9 @@ public class EmbeddingClient {
     private final AssistantConfig config;
     private final ObjectMapper objectMapper;
     private final WebClient.Builder webClientBuilder;
+    private final ConcurrentHashMap<String, CachedVector> queryCache = new ConcurrentHashMap<>();
+    private final LongAdder queryCacheHits = new LongAdder();
+    private final LongAdder queryCacheMisses = new LongAdder();
 
     public boolean isConfigured() {
         AssistantConfig.Embedding embedding = config.getEmbedding();
@@ -34,12 +39,48 @@ public class EmbeddingClient {
     }
 
     public float[] embedQuery(String text) {
-        List<float[]> result = embed(List.of(prefix(text, true)));
-        return result.isEmpty() ? new float[0] : result.get(0);
+        String prefixed = prefix(text, true);
+        String cacheKey = model() + "\n" + prefixed;
+        CachedVector cached = queryCache.get(cacheKey);
+        if (cached != null && cached.expiresAtMillis() > System.currentTimeMillis()) {
+            queryCacheHits.increment();
+            return cached.vector().clone();
+        }
+        if (cached != null) queryCache.remove(cacheKey, cached);
+        queryCacheMisses.increment();
+        List<float[]> result = embed(List.of(prefixed));
+        float[] vector = result.isEmpty() ? new float[0] : result.get(0);
+        cacheQueryVector(cacheKey, vector);
+        return vector.clone();
     }
 
     public List<float[]> embedDocuments(List<String> texts) {
         return embed(texts.stream().map(value -> prefix(value, false)).toList());
+    }
+
+    public Map<String, Object> runtimeStatus() {
+        Map<String, Object> status = new LinkedHashMap<>();
+        status.put("configured", isConfigured());
+        status.put("model", model());
+        status.put("queryCacheEntries", queryCache.size());
+        status.put("queryCacheHits", queryCacheHits.sum());
+        status.put("queryCacheMisses", queryCacheMisses.sum());
+        return status;
+    }
+
+    private void cacheQueryVector(String key, float[] vector) {
+        int maxEntries = Math.max(0, config.getEmbedding().getQueryCacheMaxEntries());
+        int ttlSeconds = Math.max(0, config.getEmbedding().getQueryCacheTtlSeconds());
+        if (maxEntries == 0 || ttlSeconds == 0 || vector == null || vector.length == 0) return;
+        if (queryCache.size() >= maxEntries) {
+            long now = System.currentTimeMillis();
+            queryCache.entrySet().removeIf(entry -> entry.getValue().expiresAtMillis() <= now);
+            if (queryCache.size() >= maxEntries) {
+                queryCache.keySet().stream().findAny().ifPresent(queryCache::remove);
+            }
+        }
+        queryCache.put(key, new CachedVector(vector.clone(),
+                System.currentTimeMillis() + ttlSeconds * 1000L));
     }
 
     private List<float[]> embed(List<String> input) {
@@ -111,5 +152,8 @@ public class EmbeddingClient {
     }
 
     private record IndexedVector(int index, float[] vector) {
+    }
+
+    private record CachedVector(float[] vector, long expiresAtMillis) {
     }
 }

@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 @Service
@@ -41,6 +42,7 @@ public class EmbeddingIndexCoordinator {
     private final AtomicBoolean running = new AtomicBoolean();
     private final AtomicBoolean paused = new AtomicBoolean();
     private final AtomicInteger interactiveRequests = new AtomicInteger();
+    private final AtomicLong lastFailedRetryAtMillis = new AtomicLong();
 
     public EmbeddingIndexCoordinator(AssistantConfig config, PageRepository pageRepository,
                                      AssistantChunkRepository chunkRepository, TextChunker chunker,
@@ -79,12 +81,32 @@ public class EmbeddingIndexCoordinator {
                 return;
             }
             List<Integer> pageIds = pageRepository.findIdsWithoutAssistantChunks(PageRequest.of(0, batch));
-            if (!pageIds.isEmpty()) embedChunks(createChunks(pageIds));
+            if (!pageIds.isEmpty()) {
+                embedChunks(createChunks(pageIds));
+                return;
+            }
+            retryFailedAfterCooldown(batch);
         } catch (Exception exception) {
             log.warn("Фоновая смысловая индексация временно недоступна: {}", exception.getMessage());
         } finally {
             running.set(false);
         }
+    }
+
+    private void retryFailedAfterCooldown(int batch) {
+        if (!config.getEmbedding().isAutoRetryFailed()
+                || chunkRepository.countByStatus(AssistantChunkStatus.FAILED) == 0) return;
+        long now = System.currentTimeMillis();
+        long delayMillis = Math.max(1, config.getEmbedding().getFailedRetryDelaySeconds()) * 1000L;
+        long previous = lastFailedRetryAtMillis.get();
+        if (previous > 0 && now - previous < delayMillis) return;
+        if (!lastFailedRetryAtMillis.compareAndSet(previous, now)) return;
+        int reset = chunkRepository.resetFailed(AssistantChunkStatus.FAILED, AssistantChunkStatus.PENDING);
+        if (reset <= 0) return;
+        log.info("Автоматически возвращено в смысловую индексацию {} фрагментов", reset);
+        List<AssistantChunk> retryBatch = chunkRepository.findByStatusOrderByIdAsc(
+                AssistantChunkStatus.PENDING, PageRequest.of(0, Math.max(1, batch * 8)));
+        if (!retryBatch.isEmpty()) embedChunks(retryBatch);
     }
 
     private List<AssistantChunk> createChunks(List<Integer> pageIds) {
@@ -211,12 +233,15 @@ public class EmbeddingIndexCoordinator {
         long ready = chunkRepository.countBySiteIdInAndStatus(sourceIds, AssistantChunkStatus.READY);
         long skipped = chunkRepository.countBySiteIdInAndStatus(sourceIds, AssistantChunkStatus.SKIPPED);
         long failed = chunkRepository.countBySiteIdInAndStatus(sourceIds, AssistantChunkStatus.FAILED);
+        long pending = chunkRepository.countBySiteIdInAndStatus(sourceIds, AssistantChunkStatus.PENDING);
         result.put("pages", pages);
         result.put("processedPages", processedPages);
         result.put("chunks", chunks);
         result.put("readyChunks", ready);
         result.put("skippedPages", skipped);
         result.put("failedChunks", failed);
+        result.put("pendingChunks", pending);
+        result.put("autoRetryFailed", config.getEmbedding().isAutoRetryFailed());
         result.put("searchReady", ready > 0);
         result.put("progress", pages == 0 ? 100 : Math.min(100, Math.round(processedPages * 100f / pages)));
         return result;

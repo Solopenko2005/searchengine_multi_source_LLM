@@ -14,8 +14,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LlmClientTest {
 
@@ -158,5 +160,70 @@ class LlmClientTest {
         JsonNode request = new ObjectMapper().readTree(requestBody.get());
         assertThat(request.path("max_output_tokens").asInt()).isEqualTo(256);
         assertThat(request.path("input").get(0).path("content").asText()).startsWith("/no_think\n");
+    }
+
+    @Test
+    void cachesIdenticalCompletedRequestsWithoutSecondProviderCall() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/responses", exchange -> {
+            calls.incrementAndGet();
+            exchange.getRequestBody().readAllBytes();
+            byte[] bytes = "{\"status\":\"completed\",\"output_text\":\"Кэшированный ответ\"}"
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+        server.start();
+        AssistantConfig config = configured();
+        LlmClient client = new LlmClient(config, new ObjectMapper(), WebClient.builder());
+        List<ChatMessage> prompt = List.of(new ChatMessage("user", "Один и тот же вопрос"));
+
+        assertThat(client.complete(prompt)).isEqualTo("Кэшированный ответ");
+        assertThat(client.complete(prompt)).isEqualTo("Кэшированный ответ");
+
+        assertThat(calls).hasValue(1);
+        assertThat(client.runtimeStatus()).containsEntry("cacheHits", 1L)
+                .containsEntry("cacheMisses", 1L);
+    }
+
+    @Test
+    void opensCircuitAfterConsecutiveProviderFailures() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/responses", exchange -> {
+            calls.incrementAndGet();
+            exchange.getRequestBody().readAllBytes();
+            exchange.sendResponseHeaders(503, -1);
+            exchange.close();
+        });
+        server.start();
+        AssistantConfig config = configured();
+        config.getLlm().setCircuitFailureThreshold(2);
+        config.getLlm().setCircuitCooldownSeconds(60);
+        LlmClient client = new LlmClient(config, new ObjectMapper(), WebClient.builder());
+
+        assertThatThrownBy(() -> client.complete(List.of(new ChatMessage("user", "Первый"))))
+                .isInstanceOf(LlmClient.LlmException.class);
+        assertThatThrownBy(() -> client.complete(List.of(new ChatMessage("user", "Второй"))))
+                .isInstanceOf(LlmClient.LlmException.class);
+        assertThatThrownBy(() -> client.complete(List.of(new ChatMessage("user", "Третий"))))
+                .isInstanceOf(LlmClient.LlmException.class)
+                .hasMessageContaining("восстанавливается");
+
+        assertThat(calls).hasValue(2);
+        assertThat(client.runtimeStatus()).containsEntry("circuit", "open")
+                .containsEntry("consecutiveFailures", 2);
+    }
+
+    private AssistantConfig configured() {
+        AssistantConfig config = new AssistantConfig();
+        config.getLlm().setApiKey("test-key");
+        config.getLlm().setBaseUrl("http://localhost:" + server.getAddress().getPort());
+        config.getLlm().setModel("gpt-test");
+        config.getLlm().setRetryAttempts(1);
+        return config;
     }
 }
