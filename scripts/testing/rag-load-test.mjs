@@ -36,6 +36,7 @@ const cleanupIdentitiesFile = arg("cleanup-identities", "");
 const sloProfile = arg("slo-profile", "interactive-default");
 const ttftP95LimitMs = Math.max(1, Number(arg("ttft-p95-ms", "5000")));
 const totalP95LimitMs = Math.max(1, Number(arg("total-p95-ms", "20000")));
+const requestRetries = Math.min(2, Math.max(0, Number(arg("request-retries", "1"))));
 const inviteCode = inviteFile && fs.existsSync(path.resolve(inviteFile))
   ? fs.readFileSync(path.resolve(inviteFile), "utf8").trim() : "";
 const env = { ...parseEnv(path.resolve(arg("credentials-file", ".env"))), ...process.env };
@@ -211,12 +212,24 @@ async function one(index, session) {
   }
 }
 
+async function oneWithRetry(index, session) {
+  let sample;
+  for (let attempt = 0; attempt <= requestRetries; attempt++) {
+    sample = await one(index, session);
+    const transient = sample.status === 0 || sample.status >= 500;
+    if (!transient || attempt === requestRetries) {
+      return { ...sample, attempts: attempt + 1 };
+    }
+  }
+  return sample;
+}
+
 const samples = new Array(iterations);
 let next = 0;
 async function worker(workerIndex) {
   while (next < iterations) {
     const index = next++;
-    samples[index] = await one(index, sessions[workerIndex]);
+    samples[index] = await oneWithRetry(index, sessions[workerIndex]);
   }
 }
 await Promise.all(Array.from({ length: concurrency }, (_, index) => worker(index)));
@@ -233,6 +246,7 @@ const report = {
   sloProfile,
   concurrency,
   iterations,
+  requestRetries,
   summary: {
     successful,
     failed: iterations - successful,

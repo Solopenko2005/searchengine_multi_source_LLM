@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680"><rect width="1200" height="680" fill="#FDFDF5"/><style>text{font-family:Montserrat,Arial,sans-serif;fill:#17213D}.title{font-size:32px;font-weight:700;fill:#3D568F}.label{font-size:22px}.small{font-size:18px}.value{font-size:21px;font-weight:700;fill:#3D568F}.grid{stroke:#DCE5F6;stroke-width:1}</style><text class="title" x="60" y="62">Ускорение полного RAG-сценария</text>
+    <text class="small" x="60" y="100">Qwen3-4B, реальные источники группы, потоковый ответ и проверка цитат</text><text class="label" x="60" y="133">Первый токен, p95</text>
+      <text class="small" x="60" y="178">было</text>
+      <rect x="130" y="148" width="441.30345567344847" height="42" rx="10" fill="#9FBAF1"/>
+      <text class="value" x="591.3034556734485" y="178">50.45 с</text>
+      <text class="small" x="60" y="232">cold</text>
+      <rect x="130" y="202" width="136.7291230064496" height="42" rx="10" fill="#3D568F"/>
+      <text class="value" x="286.72912300644964" y="232">15.63 с</text>
+      <text class="small" x="60" y="286">warm</text>
+      <rect x="130" y="256" width="14.374412756052175" height="42" rx="10" fill="#EAF3B2" stroke="#3D568F"/>
+      <text class="value" x="164.37441275605218" y="286">1.64 с</text><text class="label" x="60" y="348">Полный ответ, p95</text>
+      <text class="small" x="60" y="393">было</text>
+      <rect x="130" y="363" width="760" height="42" rx="10" fill="#9FBAF1"/>
+      <text class="value" x="910" y="393">86.88 с</text>
+      <text class="small" x="60" y="447">cold</text>
+      <rect x="130" y="417" width="250.671706360703" height="42" rx="10" fill="#3D568F"/>
+      <text class="value" x="400.671706360703" y="447">28.66 с</text>
+      <text class="small" x="60" y="501">warm</text>
+      <rect x="130" y="471" width="143.96501128187492" height="42" rx="10" fill="#EAF3B2" stroke="#3D568F"/>
+      <text class="value" x="293.9650112818749" y="501">16.46 с</text><text class="small" x="60" y="655">Успешность 5/5, гибридный retrieval, валидные цитаты в 100% ответов.</text></svg>

@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-09-09T17:27:55Z",
+  "passed": true,
+  "status": 200,
+  "model": "/home/scientific/.lmstudio/models/lmstudio-community/Qwen3-4B-GGUF/Qwen3-4B-Q4_K_M.gguf",
+  "durationMs": 4011.28,
+  "answer": "Для того чтобы улучшить точность и релевантность ответов на основе текущих знаний и данных.",
+  "usage": {
+    "input_tokens": 39,
+    "output_tokens": 33,
+    "total_tokens": 72,
+    "input_tokens_details": {
+      "cached_tokens": 0
+    }
+  }
+}

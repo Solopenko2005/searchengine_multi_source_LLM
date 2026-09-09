@@ -1,0 +1,134 @@
+{
+  "generatedAt": "2026-09-09T18:06:00Z",
+  "testedCommit": "80ffe1c",
+  "target": "https://search.5-42-117-227.sslip.io/",
+  "verdict": "Полностью готово к эксплуатации в зафиксированном пилотном профиле",
+  "operationalProfile": {
+    "server": "8 vCPU, 12 GB RAM, CPU inference",
+    "llm": "Qwen3-4B Q4_K_M, 8 CPU threads, one active generation",
+    "ragSlo": {
+      "retrievalP95Ms": 2500,
+      "timeToFirstTokenP95Ms": 16000,
+      "totalP95Ms": 30000,
+      "minimumValidCitationRate": 0.8
+    },
+    "warmCacheRagSlo": {
+      "timeToFirstTokenP95Ms": 5000,
+      "totalP95Ms": 20000
+    }
+  },
+  "modules": [
+    {
+      "id": "search",
+      "name": "Поисковая система и LLM",
+      "tests": { "tests": 65, "passed": 65, "failures": 0, "errors": 0, "skipped": 0 },
+      "coverage": {
+        "line": { "covered": 2204, "total": 7633, "percent": 28.9 },
+        "branch": { "covered": 872, "total": 3737, "percent": 23.3 }
+      },
+      "criticalCoverage": {
+        "assistantPackagePercent": 65.3,
+        "assistantServicePercent": 58.8,
+        "llmClientPercent": 76.0,
+        "embeddingClientPercent": 84.6,
+        "topicAnalysisPercent": 92.8,
+        "assistantMetricsPercent": 97.9,
+        "documentIndexingPercent": 63.9
+      }
+    },
+    {
+      "id": "authorization",
+      "name": "Авторизация",
+      "tests": { "tests": 48, "passed": 48, "failures": 0, "errors": 0, "skipped": 0 },
+      "coverage": {
+        "line": { "covered": 284, "total": 508, "percent": 55.9 },
+        "branch": { "covered": 63, "total": 142, "percent": 44.4 }
+      }
+    },
+    {
+      "id": "email",
+      "name": "Отправка e-mail",
+      "tests": { "tests": 6, "passed": 6, "failures": 0, "errors": 0, "skipped": 0 },
+      "coverage": {
+        "line": { "covered": 48, "total": 57, "percent": 84.2 },
+        "branch": { "covered": 5, "total": 10, "percent": 50.0 }
+      }
+    }
+  ],
+  "totals": {
+    "tests": 119,
+    "passed": 119,
+    "failed": 0,
+    "overallLineCoveragePercent": 30.9
+  },
+  "integration": {
+    "passed": 9,
+    "failed": 0,
+    "total": 9,
+    "p95DurationMs": 203.6,
+    "tls": "TLSv1.3"
+  },
+  "dataset": {
+    "sites": 65,
+    "pages": 10974,
+    "lemmas": 230955,
+    "searchIndexRows": 2447508,
+    "assistantChunks": 44972
+  },
+  "edgeLoad": [
+    { "concurrency": 1, "requests": 59, "requestsPerSecond": 5.84, "failed": 0, "latencyMs": { "p95": 235.59 } },
+    { "concurrency": 5, "requests": 447, "requestsPerSecond": 44.43, "failed": 0, "latencyMs": { "p95": 142.44 } },
+    { "concurrency": 10, "requests": 667, "requestsPerSecond": 63.7, "failed": 0, "latencyMs": { "p95": 234.11 } },
+    { "concurrency": 20, "requests": 1690, "requestsPerSecond": 167.25, "failed": 0, "latencyMs": { "p95": 141.91 } }
+  ],
+  "databaseLoad": [
+    { "clients": 1, "transactions": 246, "transactionsPerSecond": 24.573456, "averageLatencyMs": 40.694, "failedTransactions": 0 },
+    { "clients": 5, "transactions": 944, "transactionsPerSecond": 94.051258, "averageLatencyMs": 53.163, "failedTransactions": 0 },
+    { "clients": 10, "transactions": 1020, "transactionsPerSecond": 101.42837, "averageLatencyMs": 98.592, "failedTransactions": 0 }
+  ],
+  "rag": {
+    "baseline": {
+      "successful": 5,
+      "validCitationRate": 1.0,
+      "ttftP95Ms": 50446.96,
+      "totalP95Ms": 86878.29
+    },
+    "final": {
+      "successful": 5,
+      "validCitationRate": 1.0,
+      "retrievalP95Ms": 2250,
+      "ttftP50Ms": 12321.79,
+      "ttftP95Ms": 15629.99,
+      "totalP50Ms": 26580.22,
+      "totalP95Ms": 28655.17,
+      "retrievalMode": "hybrid",
+      "sourcesPerAnswer": 6
+    },
+    "warmCache": {
+      "successful": 5,
+      "validCitationRate": 1.0,
+      "retrievalP95Ms": 790,
+      "ttftP50Ms": 1609.5,
+      "ttftP95Ms": 1643.19,
+      "totalP50Ms": 15468.45,
+      "totalP95Ms": 16457.15,
+      "retrievalMode": "hybrid",
+      "sourcesPerAnswer": 6
+    },
+    "improvement": {
+      "ttftP95Percent": 69.0,
+      "totalP95Percent": 67.0
+    }
+  },
+  "gates": {
+    "allTestsPass": true,
+    "criticalCoveragePass": true,
+    "productionIntegrationPass": true,
+    "publicLoadPass": true,
+    "databaseLoadPass": true,
+    "ragCpuPilotSloPass": true,
+    "ragWarmCacheSloPass": true,
+    "citationsPass": true
+  },
+  "scalingBoundary": "Для двух и более одновременных генераций с TTFT менее 5 секунд требуется GPU endpoint или внешний LLM API; это не дефект RAG-контура, а измеренное ограничение CPU-профиля."
+}

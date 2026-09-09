@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-09-09T18:05:38.447Z",
+  "target": "https://search.5-42-117-227.sslip.io/",
+  "concurrency": 10,
+  "configuredDurationSeconds": 10,
+  "elapsedSeconds": 10.47,
+  "requests": 667,
+  "successful": 667,
+  "failed": 0,
+  "transportErrors": 0,
+  "assertionErrors": 0,
+  "statusCounts": {
+    "200": 667
+  },
+  "requestsPerSecond": 63.7,
+  "latencyMs": {
+    "min": 49.07,
+    "average": 142.66,
+    "p50": 123.58,
+    "p90": 227.26,
+    "p95": 234.11,
+    "p99": 366.18,
+    "max": 432.57
+  },
+  "thresholds": {
+    "errorRateBelowOnePercent": true,
+    "p95BelowTwoSeconds": true
+  }
+}

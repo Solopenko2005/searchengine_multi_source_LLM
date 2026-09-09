@@ -91,5 +91,35 @@ function write(name, body) { fs.writeFileSync(path.join(outputDir, name), svg(bo
   write("system-scale.svg", body);
 }
 
-console.log(`Charts: ${path.resolve(outputDir)}`);
+if (data.rag?.baseline && data.rag?.final) {
+  const baseline = data.rag.baseline;
+  const final = data.rag.final;
+  const warm = data.rag.warmCache;
+  const metrics = [
+    ["Первый токен, p95", baseline.ttftP95Ms, final.ttftP95Ms, warm?.ttftP95Ms],
+    ["Полный ответ, p95", baseline.totalP95Ms, final.totalP95Ms, warm?.totalP95Ms],
+  ];
+  const maxValue = Math.max(...metrics.flatMap(([, before, after, steady]) => [before, after, steady ?? 0]));
+  let body = `<text class="title" x="60" y="62">Ускорение полного RAG-сценария</text>
+    <text class="small" x="60" y="100">Qwen3-4B, реальные источники группы, потоковый ответ и проверка цитат</text>`;
+  metrics.forEach(([label, before, after, steady], index) => {
+    const y = 175 + index * 215;
+    const beforeWidth = before / maxValue * 760;
+    const afterWidth = after / maxValue * 760;
+    const steadyWidth = (steady ?? 0) / maxValue * 760;
+    body += `<text class="label" x="60" y="${y - 42}">${label}</text>
+      <text class="small" x="60" y="${y + 3}">было</text>
+      <rect x="130" y="${y - 27}" width="${beforeWidth}" height="42" rx="10" fill="${colors.light}"/>
+      <text class="value" x="${150 + beforeWidth}" y="${y + 3}">${(before / 1000).toFixed(2)} с</text>
+      <text class="small" x="60" y="${y + 57}">cold</text>
+      <rect x="130" y="${y + 27}" width="${afterWidth}" height="42" rx="10" fill="${colors.blue}"/>
+      <text class="value" x="${150 + afterWidth}" y="${y + 57}">${(after / 1000).toFixed(2)} с</text>
+      <text class="small" x="60" y="${y + 111}">warm</text>
+      <rect x="130" y="${y + 81}" width="${steadyWidth}" height="42" rx="10" fill="${colors.lime}" stroke="${colors.blue}"/>
+      <text class="value" x="${150 + steadyWidth}" y="${y + 111}">${((steady ?? 0) / 1000).toFixed(2)} с</text>`;
+  });
+  body += `<text class="small" x="60" y="655">Успешность 5/5, гибридный retrieval, валидные цитаты в 100% ответов.</text>`;
+  write("rag-optimization.svg", body);
+}
 
+console.log(`Charts: ${path.resolve(outputDir)}`);

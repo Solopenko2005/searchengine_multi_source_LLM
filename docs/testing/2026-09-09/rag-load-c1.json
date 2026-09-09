@@ -1,0 +1,102 @@
+{
+  "generatedAt": "2026-09-09T17:01:18.683Z",
+  "target": "https://search.5-42-117-227.sslip.io/api/assistant/chat/stream",
+  "profile": "authenticated RAG/SSE, read-only",
+  "accountMode": "ephemeral visitor",
+  "inheritedGroupSources": true,
+  "concurrency": 1,
+  "iterations": 5,
+  "summary": {
+    "successful": 5,
+    "failed": 0,
+    "successRate": 1,
+    "validCitationRate": 1,
+    "ttftP50Ms": 46910.98,
+    "ttftP95Ms": 50446.96,
+    "totalP50Ms": 67906.56,
+    "totalP95Ms": 86878.29
+  },
+  "thresholds": {
+    "allResponsesUseLlm": true,
+    "validCitationRateAtLeast80Percent": true,
+    "ttftP95BelowFiveSeconds": false,
+    "totalP95BelowTwentySeconds": false
+  },
+  "samples": [
+    {
+      "status": 200,
+      "success": true,
+      "usedLlm": true,
+      "retrievalMode": "hybrid",
+      "sourceCount": 6,
+      "citationCount": 3,
+      "validCitationCount": 3,
+      "hasValidCitation": true,
+      "ttftMs": 50446.96,
+      "totalMs": 83078.77,
+      "serverRetrievalMs": 2579,
+      "serverGenerationMs": 80338,
+      "error": ""
+    },
+    {
+      "status": 200,
+      "success": true,
+      "usedLlm": true,
+      "retrievalMode": "hybrid",
+      "sourceCount": 6,
+      "citationCount": 3,
+      "validCitationCount": 3,
+      "hasValidCitation": true,
+      "ttftMs": 49164.19,
+      "totalMs": 86878.29,
+      "serverRetrievalMs": 913,
+      "serverGenerationMs": 85855,
+      "error": ""
+    },
+    {
+      "status": 200,
+      "success": true,
+      "usedLlm": true,
+      "retrievalMode": "hybrid",
+      "sourceCount": 6,
+      "citationCount": 6,
+      "validCitationCount": 6,
+      "hasValidCitation": true,
+      "ttftMs": 46910.98,
+      "totalMs": 58254.47,
+      "serverRetrievalMs": 1017,
+      "serverGenerationMs": 56914,
+      "error": ""
+    },
+    {
+      "status": 200,
+      "success": true,
+      "usedLlm": true,
+      "retrievalMode": "hybrid",
+      "sourceCount": 6,
+      "citationCount": 6,
+      "validCitationCount": 6,
+      "hasValidCitation": true,
+      "ttftMs": 44493.21,
+      "totalMs": 65745.37,
+      "serverRetrievalMs": 880,
+      "serverGenerationMs": 64755,
+      "error": ""
+    },
+    {
+      "status": 200,
+      "success": true,
+      "usedLlm": true,
+      "retrievalMode": "hybrid",
+      "sourceCount": 6,
+      "citationCount": 2,
+      "validCitationCount": 2,
+      "hasValidCitation": true,
+      "ttftMs": 41249.01,
+      "totalMs": 67906.56,
+      "serverRetrievalMs": 672,
+      "serverGenerationMs": 67145,
+      "error": ""
+    }
+  ]
+}

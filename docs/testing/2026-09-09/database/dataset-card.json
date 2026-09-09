@@ -1,0 +1,14 @@
+{
+  "snapshotDate": "2026-09-09",
+  "environment": "production",
+  "containsUserContent": true,
+  "fullDumpPublished": false,
+  "counts": {
+    "sites": 65,
+    "pages": 10974,
+    "lemmas": 230955,
+    "searchIndexRows": 2447508,
+    "assistantChunks": 44972
+  },
+  "loadTestMode": "read-only SELECT"
+}
