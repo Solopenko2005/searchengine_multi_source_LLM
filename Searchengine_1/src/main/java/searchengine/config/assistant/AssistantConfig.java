@@ -85,7 +85,7 @@ public class AssistantConfig {
         private int backgroundTimeoutSeconds = 35;
 
         /** Компактный лимит ответа для фоновых structured-задач локальной модели. */
-        private int backgroundMaxOutputTokens = 320;
+        private int backgroundMaxOutputTokens = 192;
 
         /**
          * Отдельный OpenAI-совместимый endpoint для фонового анализа тематик.

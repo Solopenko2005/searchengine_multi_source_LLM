@@ -40,7 +40,7 @@ upsert_env EMBEDDING_BASE_URL http://host.docker.internal:1234/v1
 upsert_env ASSISTANT_RAG_LOCAL_CONTEXT_CHARS 720
 upsert_env OPENAI_MAX_OUTPUT_TOKENS 128
 upsert_env OPENAI_BACKGROUND_TIMEOUT_SECONDS 35
-upsert_env OPENAI_BACKGROUND_MAX_OUTPUT_TOKENS 320
+upsert_env OPENAI_BACKGROUND_MAX_OUTPUT_TOKENS 192
 
 # The production LM Studio server and the dedicated llama-server use the same
 # bearer token. Preserve the existing secret without printing it.
@@ -71,7 +71,8 @@ sudo ufw allow from 172.28.0.0/24 to any port 1236 proto tcp \
 sudo systemctl daemon-reload
 sudo systemctl restart lmstudio.service
 sudo systemctl enable --now llm-inference.service
-sudo systemctl enable --now llm-background.service
+sudo systemctl enable llm-background.service
+sudo systemctl restart llm-background.service
 
 cd "${APP_DIR}"
 sudo docker compose --env-file deploy/.env.production -f deploy/docker-compose.yml \

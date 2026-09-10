@@ -137,8 +137,8 @@ class LlmTopicAnalysisServiceTest {
         verify(client).completeJsonBackground(messages.capture(), anyString(), any());
         String prompt = messages.getValue().get(1).getContent();
         assertThat(prompt.length()).isLessThan(5_000);
-        assertThat(prompt).contains("S1 | веб-источник", "S18 | веб-источник", "источник 40")
-                .doesNotContain("S19 | веб-источник");
+        assertThat(prompt).contains("S1 | веб-источник", "S12 | веб-источник", "источник 40")
+                .doesNotContain("S13 | веб-источник");
     }
 
     @Test
