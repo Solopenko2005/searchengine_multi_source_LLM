@@ -53,7 +53,7 @@ if [ -z "${llm_key}" ]; then
 fi
 upsert_env EMBEDDING_API_KEY "${llm_key}"
 upsert_env LLM_BACKGROUND_API_KEY "${llm_key}"
-upsert_env LLM_BACKGROUND_MODEL local-qwen3-4b
+upsert_env LLM_BACKGROUND_MODEL local-qwen3-0.6b
 chmod 600 "${ENV_FILE}"
 
 chmod 0755 "${APP_DIR}/deploy/scripts/run-llm-inference.sh"

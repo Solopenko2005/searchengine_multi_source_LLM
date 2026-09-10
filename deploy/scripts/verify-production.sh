@@ -23,7 +23,7 @@ curl --fail --silent --show-error --max-time 180 \
   --header "Authorization: Bearer ${LLM_API_KEY}" \
   --data-binary @- http://127.0.0.1:1235/v1/responses <<'JSON' \
   | python3 -c 'import json,sys; data=json.load(sys.stdin); print(data["output"][0]["content"][0]["text"].strip())'
-{"model":"local-qwen3-4b","store":false,"max_output_tokens":32,"input":[{"role":"user","content":"/no_think\nОтветьте только одним словом: работает"}],"text":{"format":{"type":"text"}}}
+{"model":"local-qwen3-0.6b","store":false,"max_output_tokens":32,"input":[{"role":"user","content":"/no_think\nОтветьте только одним словом: работает"}],"text":{"format":{"type":"text"}}}
 JSON
 
 echo "== Embeddings =="
