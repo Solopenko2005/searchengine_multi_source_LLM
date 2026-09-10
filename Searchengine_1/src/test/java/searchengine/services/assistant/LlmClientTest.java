@@ -13,6 +13,12 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -22,11 +28,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class LlmClientTest {
 
     private HttpServer server;
+    private ExecutorService serverExecutor;
 
     @AfterEach
     void stopServer() {
         if (server != null) {
             server.stop(0);
+        }
+        if (serverExecutor != null) {
+            serverExecutor.shutdownNow();
         }
     }
 
@@ -103,6 +113,80 @@ class LlmClientTest {
         assertThat(request.path("text").path("format").path("type").asText()).isEqualTo("text");
         assertThat(request.path("max_output_tokens").asInt()).isEqualTo(768);
         assertThat(request.path("instructions").asText()).contains("JSON Schema", "required", "value");
+    }
+
+    @Test
+    void interactiveStreamPreemptsLowPriorityBackgroundGeneration() throws Exception {
+        CountDownLatch backgroundStarted = new CountDownLatch(1);
+        AtomicReference<String> backgroundBody = new AtomicReference<>();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        serverExecutor = Executors.newCachedThreadPool();
+        server.setExecutor(serverExecutor);
+        server.createContext("/responses", exchange -> {
+            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            if (body.contains("background topic request")) {
+                backgroundBody.set(body);
+                backgroundStarted.countDown();
+                try {
+                    Thread.sleep(10_000);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+                exchange.close();
+                return;
+            }
+            byte[] bytes = """
+                    event: response.output_text.delta
+                    data: {"type":"response.output_text.delta","delta":"Интерактивный ответ"}
+
+                    data: [DONE]
+
+                    """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream; charset=utf-8");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+        server.start();
+
+        ObjectMapper mapper = new ObjectMapper();
+        AssistantConfig config = new AssistantConfig();
+        config.getLlm().setApiKey("local-test-key");
+        config.getLlm().setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
+        config.getLlm().setModel("local-test-model");
+        config.getLlm().setMaxConcurrentRequests(1);
+        config.getLlm().setQueueTimeoutMillis(50);
+        config.getLlm().setBackgroundMaxOutputTokens(320);
+        config.getLlm().setBackgroundTimeoutSeconds(10);
+        config.getLlm().setRetryAttempts(1);
+        LlmClient client = new LlmClient(config, mapper, WebClient.builder());
+        ExecutorService caller = Executors.newSingleThreadExecutor();
+        try {
+            Future<String> background = caller.submit(() -> client.completeJsonBackground(
+                    List.of(new ChatMessage("user", "background topic request")),
+                    "topics", mapper.readTree("""
+                            {"type":"object","properties":{"topics":{"type":"array"}}}
+                            """)));
+            assertThat(backgroundStarted.await(3, TimeUnit.SECONDS)).isTrue();
+
+            List<String> deltas = client.stream(List.of(new ChatMessage("user", "interactive question")))
+                    .collectList().block(Duration.ofSeconds(5));
+
+            assertThat(deltas).containsExactly("Интерактивный ответ");
+            try {
+                background.get(2, TimeUnit.SECONDS);
+                throw new AssertionError("Background request was expected to be preempted");
+            } catch (ExecutionException error) {
+                assertThat(error.getCause()).isInstanceOf(LlmClient.LlmException.class)
+                        .hasMessageContaining("уступил интерактивному запросу");
+            }
+            assertThat(mapper.readTree(backgroundBody.get()).path("max_output_tokens").asInt())
+                    .isEqualTo(320);
+            assertThat(client.runtimeStatus()).containsEntry("inFlight", 0)
+                    .containsEntry("backgroundActive", false);
+        } finally {
+            caller.shutdownNow();
+        }
     }
 
     @Test

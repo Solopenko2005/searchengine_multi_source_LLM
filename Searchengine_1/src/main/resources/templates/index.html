@@ -613,6 +613,9 @@ p.error-browser
             }
             if (!answer) answer = streamError || tr('(пустой ответ)', '(empty response)');
             shell.text.textContent = answer;
+            if (streamError && answer.indexOf(streamError) < 0) {
+                shell.meta.textContent = ' · ' + streamError;
+            }
             shell.stage.textContent = '';
             shell.root.insertAdjacentHTML('beforeend', badge(usedLlm) + sourcesHtml(sources));
             history.push({ role: 'assistant', content: answer });

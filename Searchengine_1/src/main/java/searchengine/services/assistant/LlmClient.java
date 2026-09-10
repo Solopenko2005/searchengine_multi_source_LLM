@@ -26,6 +26,8 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -45,6 +47,9 @@ public class LlmClient {
     private final WebClient.Builder webClientBuilder;
     private final Semaphore generationSlots;
     private final AtomicInteger inFlight = new AtomicInteger();
+    private final AtomicInteger interactiveWaiters = new AtomicInteger();
+    private final AtomicReference<Thread> backgroundGenerationThread = new AtomicReference<>();
+    private final AtomicBoolean backgroundPreempted = new AtomicBoolean();
     private final AtomicInteger consecutiveFailures = new AtomicInteger();
     private final AtomicLong circuitOpenUntilMillis = new AtomicLong();
     private final ConcurrentHashMap<String, CachedResponse> responseCache = new ConcurrentHashMap<>();
@@ -77,7 +82,7 @@ public class LlmClient {
 
     /** Выполняет обычную текстовую генерацию. */
     public String complete(List<ChatMessage> messages) {
-        return execute(buildRequest(messages, null, null));
+        return execute(buildRequest(messages, null, null, null), false);
     }
 
     /**
@@ -85,20 +90,29 @@ public class LlmClient {
      * JSON, соответствующим переданной схеме.
      */
     public String completeJson(List<ChatMessage> messages, String schemaName, JsonNode schema) {
-        return execute(buildRequest(messages, schemaName, schema));
+        return execute(buildRequest(messages, schemaName, schema, null), false);
+    }
+
+    /**
+     * Structured generation for refreshable background data such as topic summaries.
+     * It never queues ahead of a user answer and can be preempted by interactive chat.
+     */
+    public String completeJsonBackground(List<ChatMessage> messages, String schemaName, JsonNode schema) {
+        int tokenLimit = Math.max(128, config.getLlm().getBackgroundMaxOutputTokens());
+        return execute(buildRequest(messages, schemaName, schema, tokenLimit), true);
     }
 
     /** Streams visible output text deltas from an OpenAI-compatible Responses endpoint. */
     public Flux<String> stream(List<ChatMessage> messages) {
         if (!isConfigured()) return Flux.error(new LlmException("OpenAI API не настроен"));
-        Map<String, Object> body = buildRequest(messages, null, null);
+        Map<String, Object> body = buildRequest(messages, null, null, null);
         body.put("stream", true);
         String requestCacheKey = cacheKey(body);
         AssistantConfig.Llm llm = config.getLlm();
         return Flux.defer(() -> {
                     String cached = cachedResponse(requestCacheKey);
                     if (cached != null) return Flux.just(cached);
-                    acquireGenerationSlot();
+                    acquireInteractiveGenerationSlot();
                     StringBuilder completedText = new StringBuilder();
                     WebClient webClient = webClient(MediaType.TEXT_EVENT_STREAM_VALUE);
                     return webClient.post().uri("/responses").bodyValue(body).retrieve()
@@ -133,7 +147,8 @@ public class LlmClient {
     }
 
     private Map<String, Object> buildRequest(List<ChatMessage> messages,
-                                             String schemaName, JsonNode schema) {
+                                             String schemaName, JsonNode schema,
+                                             Integer outputTokenLimit) {
         AssistantConfig.Llm llm = config.getLlm();
         boolean localEndpoint = isLocalEndpoint(llm.getBaseUrl());
         Map<String, Object> body = new LinkedHashMap<>();
@@ -148,6 +163,9 @@ public class LlmClient {
             outputTokens = schema == null
                     ? Math.min(outputTokens, 256)
                     : Math.max(640, Math.min(outputTokens, 768));
+        }
+        if (outputTokenLimit != null) {
+            outputTokens = Math.min(outputTokens, Math.max(128, outputTokenLimit));
         }
         body.put("max_output_tokens", outputTokens);
         safetyIdentifier().ifPresent(value -> body.put("safety_identifier", value));
@@ -229,7 +247,7 @@ public class LlmClient {
         }
     }
 
-    private String execute(Map<String, Object> body) {
+    private String execute(Map<String, Object> body, boolean background) {
         if (!isConfigured()) {
             throw new LlmException("OpenAI API не настроен");
         }
@@ -238,24 +256,40 @@ public class LlmClient {
         String cached = cachedResponse(cacheKey);
         if (cached != null) return cached;
 
-        acquireGenerationSlot();
+        if (background) {
+            acquireBackgroundGenerationSlot();
+        } else {
+            acquireInteractiveGenerationSlot();
+        }
         try {
-            String result = executeWithRetries(body);
-            recordProviderSuccess();
+            int timeoutSeconds = background
+                    ? Math.min(config.getLlm().getTimeoutSeconds(),
+                    Math.max(5, config.getLlm().getBackgroundTimeoutSeconds()))
+                    : config.getLlm().getTimeoutSeconds();
+            int attempts = background ? 1 : Math.max(1, config.getLlm().getRetryAttempts());
+            String result = executeWithRetries(body, timeoutSeconds, attempts);
+            if (!background) recordProviderSuccess();
             cacheResponse(cacheKey, result);
             return result;
         } catch (RuntimeException exception) {
-            recordProviderFailure(exception);
+            // Refreshable background work must never open the circuit for chat.
+            if (!background) recordProviderFailure(exception);
             throw exception;
         } finally {
+            if (background) {
+                Thread current = Thread.currentThread();
+                backgroundGenerationThread.compareAndSet(current, null);
+                if (backgroundPreempted.getAndSet(false)) {
+                    // Reactor restores the interrupt flag after cancelling block().
+                    // Clear only the interrupt explicitly requested by an interactive call.
+                    Thread.interrupted();
+                }
+            }
             releaseGenerationSlot();
         }
     }
 
-    private String executeWithRetries(Map<String, Object> body) {
-        AssistantConfig.Llm llm = config.getLlm();
-
-        int attempts = Math.max(1, llm.getRetryAttempts());
+    private String executeWithRetries(Map<String, Object> body, int timeoutSeconds, int attempts) {
         RuntimeException lastError = null;
 
         for (int attempt = 1; attempt <= attempts; attempt++) {
@@ -267,7 +301,7 @@ public class LlmClient {
                         .bodyValue(body)
                         .retrieve()
                         .bodyToMono(String.class)
-                        .block(Duration.ofSeconds(Math.max(5, llm.getTimeoutSeconds())));
+                        .block(Duration.ofSeconds(Math.max(5, timeoutSeconds)));
 
                 return extractOutputText(responseBody);
             } catch (WebClientResponseException e) {
@@ -279,6 +313,9 @@ public class LlmClient {
             } catch (LlmException e) {
                 throw e;
             } catch (RuntimeException e) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new LlmException("Фоновый LLM-анализ уступил интерактивному запросу", e);
+                }
                 lastError = new LlmException("OpenAI API временно недоступен", e);
                 if (attempt == attempts) {
                     throw lastError;
@@ -300,6 +337,8 @@ public class LlmClient {
         status.put("circuitRetryAt", openUntil > now ? Instant.ofEpochMilli(openUntil).toString() : null);
         status.put("consecutiveFailures", consecutiveFailures.get());
         status.put("inFlight", inFlight.get());
+        status.put("interactiveWaiters", interactiveWaiters.get());
+        status.put("backgroundActive", backgroundGenerationThread.get() != null);
         status.put("maxConcurrent", Math.max(1, config.getLlm().getMaxConcurrentRequests()));
         status.put("cacheEntries", responseCache.size());
         status.put("cacheHits", cacheHits.sum());
@@ -317,7 +356,7 @@ public class LlmClient {
                 .build();
     }
 
-    private void acquireGenerationSlot() {
+    private void assertCircuitAvailable() {
         long now = System.currentTimeMillis();
         long openUntil = circuitOpenUntilMillis.get();
         if (openUntil > now) {
@@ -325,9 +364,22 @@ public class LlmClient {
                     + Math.max(1, (openUntil - now + 999) / 1000) + " с");
         }
         if (openUntil > 0) circuitOpenUntilMillis.compareAndSet(openUntil, 0);
+    }
+
+    private void acquireInteractiveGenerationSlot() {
+        assertCircuitAvailable();
+        interactiveWaiters.incrementAndGet();
         try {
+            Thread background = generationSlots.availablePermits() == 0
+                    ? backgroundGenerationThread.get() : null;
+            long waitMillis = Math.max(0, config.getLlm().getQueueTimeoutMillis());
+            if (background != null && background != Thread.currentThread()) {
+                backgroundPreempted.set(true);
+                background.interrupt();
+                waitMillis = Math.max(waitMillis, 5_000L);
+            }
             boolean acquired = generationSlots.tryAcquire(
-                    Math.max(0, config.getLlm().getQueueTimeoutMillis()), TimeUnit.MILLISECONDS);
+                    waitMillis, TimeUnit.MILLISECONDS);
             if (!acquired) {
                 throw new LlmException("Языковая модель занята; повторите запрос через несколько секунд");
             }
@@ -335,6 +387,27 @@ public class LlmClient {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new LlmException("Ожидание языковой модели прервано", exception);
+        } finally {
+            interactiveWaiters.decrementAndGet();
+        }
+    }
+
+    private void acquireBackgroundGenerationSlot() {
+        assertCircuitAvailable();
+        Thread current = Thread.currentThread();
+        if (interactiveWaiters.get() > 0
+                || !backgroundGenerationThread.compareAndSet(null, current)) {
+            throw new LlmException("Фоновый LLM-анализ отложен: ассистент обрабатывает вопрос пользователя");
+        }
+        boolean acquired = false;
+        try {
+            acquired = interactiveWaiters.get() == 0 && generationSlots.tryAcquire();
+            if (!acquired) {
+                throw new LlmException("Фоновый LLM-анализ отложен: языковая модель занята");
+            }
+            inFlight.incrementAndGet();
+        } finally {
+            if (!acquired) backgroundGenerationThread.compareAndSet(current, null);
         }
     }
 

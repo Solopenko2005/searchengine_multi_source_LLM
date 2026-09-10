@@ -81,6 +81,12 @@ public class AssistantConfig {
         /** Сколько запрос может ждать свободный слот LLM. */
         private long queueTimeoutMillis = 500;
 
+        /** Жёсткий лимит фоновой генерации, чтобы пересчёт тем не блокировал чат. */
+        private int backgroundTimeoutSeconds = 35;
+
+        /** Компактный лимит ответа для фоновых structured-задач локальной модели. */
+        private int backgroundMaxOutputTokens = 320;
+
         /** После скольких последовательных ошибок временно разомкнуть цепь вызовов. */
         private int circuitFailureThreshold = 3;
 

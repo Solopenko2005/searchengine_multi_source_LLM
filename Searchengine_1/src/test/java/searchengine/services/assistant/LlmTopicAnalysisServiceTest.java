@@ -44,7 +44,7 @@ class LlmTopicAnalysisServiceTest {
                 new TestingAuthenticationToken("alice", "n/a", "ROLE_USER"));
         LlmClient client = mock(LlmClient.class);
         when(client.isConfigured()).thenReturn(true);
-        when(client.completeJson(any(), anyString(), any())).thenReturn("""
+        when(client.completeJsonBackground(any(), anyString(), any())).thenReturn("""
                 {"summary":"Обзор","topics":[
                   {"theme":"Селекция растений","description":"Методы отбора","confidence":0.92,"documentIndexes":[1]},
                   {"theme":"Войти Регистрация Научные статьи Журналы","description":"Меню","confidence":0.99,"documentIndexes":[1]},
@@ -77,7 +77,7 @@ class LlmTopicAnalysisServiceTest {
         LlmClient client = mock(LlmClient.class);
         when(client.isConfigured()).thenReturn(true);
         when(client.isLocalProvider()).thenReturn(true);
-        when(client.completeJson(any(), anyString(), any())).thenReturn("""
+        when(client.completeJsonBackground(any(), anyString(), any())).thenReturn("""
                 {"summary":"Обзор","topics":[
                   {"theme":"Селекция пшеницы","description":"Методы отбора","confidence":0.94,"documentIndexes":[1]}
                 ]}
@@ -101,7 +101,7 @@ class LlmTopicAnalysisServiceTest {
         service.analyze(List.of(10), "Агрономия").orElseThrow();
 
         ArgumentCaptor<List<ChatMessage>> messages = ArgumentCaptor.forClass(List.class);
-        verify(client).completeJson(messages.capture(), anyString(), any());
+        verify(client).completeJsonBackground(messages.capture(), anyString(), any());
         String prompt = messages.getValue().get(1).getContent();
         assertThat(prompt).contains("методы селекции пшеницы");
         assertThat(prompt).doesNotContain("Свидетельство о регистрации издания");
@@ -114,7 +114,7 @@ class LlmTopicAnalysisServiceTest {
         LlmClient client = mock(LlmClient.class);
         when(client.isConfigured()).thenReturn(true);
         when(client.isLocalProvider()).thenReturn(true);
-        when(client.completeJson(any(), anyString(), any())).thenReturn("""
+        when(client.completeJsonBackground(any(), anyString(), any())).thenReturn("""
                 {"summary":"Обзор","topics":[
                   {"theme":"Машинное обучение","description":"Методы анализа","confidence":0.9,"documentIndexes":[1]}
                 ]}
@@ -134,10 +134,11 @@ class LlmTopicAnalysisServiceTest {
         service.analyze(ids.stream().map(Long::intValue).toList(), "Анализ научных исследований").orElseThrow();
 
         ArgumentCaptor<List<ChatMessage>> messages = ArgumentCaptor.forClass(List.class);
-        verify(client).completeJson(messages.capture(), anyString(), any());
+        verify(client).completeJsonBackground(messages.capture(), anyString(), any());
         String prompt = messages.getValue().get(1).getContent();
-        assertThat(prompt.length()).isLessThan(10_000);
-        assertThat(prompt).contains("S1 | веб-источник", "S40 | веб-источник");
+        assertThat(prompt.length()).isLessThan(5_000);
+        assertThat(prompt).contains("S1 | веб-источник", "S18 | веб-источник", "источник 40")
+                .doesNotContain("S19 | веб-источник");
     }
 
     @Test
@@ -147,7 +148,7 @@ class LlmTopicAnalysisServiceTest {
         LlmClient client = mock(LlmClient.class);
         when(client.isConfigured()).thenReturn(true);
         when(client.isLocalProvider()).thenReturn(true);
-        when(client.completeJson(any(), anyString(), any())).thenReturn("""
+        when(client.completeJsonBackground(any(), anyString(), any())).thenReturn("""
                 {"summary":"Обзор","topics":[
                   {"theme":"Прогнозирование урожайности","description":"Модели прогноза",\
                    "confidence":0.93,"documentIndexes":[1]}
@@ -174,7 +175,7 @@ class LlmTopicAnalysisServiceTest {
         service.analyze(List.of(10), "Агрономия").orElseThrow();
 
         ArgumentCaptor<List<ChatMessage>> messages = ArgumentCaptor.forClass(List.class);
-        verify(client).completeJson(messages.capture(), anyString(), any());
+        verify(client).completeJsonBackground(messages.capture(), anyString(), any());
         assertThat(messages.getValue().get(1).getContent())
                 .contains("прогнозировании урожайности", "машинное обучение")
                 .doesNotContain("Войти Регистрация Подписки");

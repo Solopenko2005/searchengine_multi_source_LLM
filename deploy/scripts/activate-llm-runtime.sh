@@ -34,6 +34,8 @@ upsert_env LLM_SPECULATIVE_DECODING false
 upsert_env EMBEDDING_BASE_URL http://host.docker.internal:1234/v1
 upsert_env ASSISTANT_RAG_LOCAL_CONTEXT_CHARS 720
 upsert_env OPENAI_MAX_OUTPUT_TOKENS 128
+upsert_env OPENAI_BACKGROUND_TIMEOUT_SECONDS 35
+upsert_env OPENAI_BACKGROUND_MAX_OUTPUT_TOKENS 320
 
 # The production LM Studio server and the dedicated llama-server use the same
 # bearer token. Preserve the existing secret without printing it.

@@ -49,7 +49,10 @@ public class AssistantTopicJobService {
             assistantService.refreshTopics();
             state.error = null;
         } catch (Exception exception) {
-            state.error = exception.getMessage();
+            String message = exception.getMessage();
+            state.error = message != null && message.contains("уступил интерактивному запросу")
+                    ? "Обновление тем отложено, чтобы не задерживать ответ ассистента. Повторите анализ позже."
+                    : message;
         } finally {
             state.running = false;
             state.finishedAt = LocalDateTime.now();
