@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 /**
  * Конфигурация LLM-ассистента.
  * <p>
- * Ассистент подключается к OpenAI Responses API.
+ * Ассистент подключается к OpenAI-совместимому Responses API.
  * Адрес, ключ и модель задаются переменными окружения, а секреты не хранятся в репозитории.
  */
 @Data
@@ -33,8 +33,11 @@ public class AssistantConfig {
 
     @Data
     public static class Llm {
-        /** Провайдер API. Сейчас полноценно поддерживается OpenAI Responses API. */
+        /** Провайдер API: OpenAI, Yandex AI Studio или локальный OpenAI-совместимый сервер. */
         private String provider = "openai";
+
+        /** Идентификатор каталога Yandex Cloud для формирования URI модели. */
+        private String folderId = "";
 
         /**
          * Включён ли вызов внешней модели. Если false или ключ пуст —
@@ -43,7 +46,7 @@ public class AssistantConfig {
         private boolean enabled = true;
 
         /**
-         * Базовый URL OpenAI API (без /responses).
+         * Базовый URL OpenAI-совместимого API (без /responses).
          */
         private String baseUrl = "https://api.openai.com/v1";
 
@@ -93,11 +96,29 @@ public class AssistantConfig {
          */
         private String backgroundBaseUrl = "";
 
+        /** Пустое значение определяет провайдера фоновой модели по URL. */
+        private String backgroundProvider = "";
+
+        /** Каталог Yandex Cloud фоновой модели; пустое значение повторно использует основной. */
+        private String backgroundFolderId = "";
+
         /** Пустое значение повторно использует основной API-ключ. */
         private String backgroundApiKey = "";
 
         /** Пустое значение повторно использует основную модель. */
         private String backgroundModel = "";
+
+        /** Включает резервную генеративную модель при сбое основного облачного API. */
+        private boolean fallbackEnabled = false;
+
+        /** Провайдер резервной модели. Обычно local для локального llama-server. */
+        private String fallbackProvider = "local";
+
+        private String fallbackBaseUrl = "";
+        private String fallbackApiKey = "";
+        private String fallbackModel = "";
+        private String fallbackFolderId = "";
+        private int fallbackTimeoutSeconds = 120;
 
         /** После скольких последовательных ошибок временно разомкнуть цепь вызовов. */
         private int circuitFailureThreshold = 3;

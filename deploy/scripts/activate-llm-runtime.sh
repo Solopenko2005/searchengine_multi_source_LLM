@@ -25,35 +25,27 @@ if [ ! -f "${backup}" ]; then
   chmod 600 "${backup}"
 fi
 
-upsert_env LLM_BASE_URL http://host.docker.internal:1235/v1
+upsert_env LLM_FALLBACK_ENABLED true
+upsert_env LLM_FALLBACK_PROVIDER local
+upsert_env LLM_FALLBACK_BASE_URL http://host.docker.internal:1235/v1
+upsert_env LLM_FALLBACK_API_KEY lm-studio
+upsert_env LLM_FALLBACK_MODEL local-qwen3-4b
+upsert_env LLM_FALLBACK_TIMEOUT_SECONDS 120
 upsert_env LLM_INFERENCE_PORT 1235
 upsert_env LLM_CPU_THREADS 8
 upsert_env LLM_DRAFT_CPU_THREADS 2
 upsert_env LLM_CONTEXT_SIZE 4096
 upsert_env LLM_SPECULATIVE_DECODING false
-upsert_env LLM_BACKGROUND_BASE_URL http://host.docker.internal:1236/v1
 upsert_env LLM_BACKGROUND_PORT 1236
 upsert_env LLM_BACKGROUND_CPU_THREADS 2
 upsert_env LLM_BACKGROUND_CONTEXT_SIZE 4096
 upsert_env LLM_BACKGROUND_NICE 10
 upsert_env EMBEDDING_BASE_URL http://host.docker.internal:1234/v1
 upsert_env ASSISTANT_RAG_LOCAL_CONTEXT_CHARS 720
-upsert_env OPENAI_MAX_OUTPUT_TOKENS 128
 upsert_env OPENAI_BACKGROUND_TIMEOUT_SECONDS 45
 upsert_env OPENAI_BACKGROUND_MAX_OUTPUT_TOKENS 192
 
-# The production LM Studio server and the dedicated llama-server use the same
-# bearer token. Preserve the existing secret without printing it.
-llm_key="$(sed -n 's/^LLM_API_KEY=//p' "${ENV_FILE}" | tail -n 1 | tr -d '\r')"
-llm_key="${llm_key#\"}"
-llm_key="${llm_key%\"}"
-if [ -z "${llm_key}" ]; then
-  echo "LLM_API_KEY is missing" >&2
-  exit 1
-fi
-upsert_env EMBEDDING_API_KEY "${llm_key}"
-upsert_env LLM_BACKGROUND_API_KEY "${llm_key}"
-upsert_env LLM_BACKGROUND_MODEL local-qwen3-0.6b
+upsert_env EMBEDDING_API_KEY lm-studio
 chmod 600 "${ENV_FILE}"
 
 chmod 0755 "${APP_DIR}/deploy/scripts/run-llm-inference.sh"
@@ -78,4 +70,4 @@ cd "${APP_DIR}"
 sudo docker compose --env-file deploy/.env.production -f deploy/docker-compose.yml \
   up -d --no-deps --force-recreate search
 
-echo "Dedicated LLM runtime activated"
+echo "Local fallback LLM runtime activated"

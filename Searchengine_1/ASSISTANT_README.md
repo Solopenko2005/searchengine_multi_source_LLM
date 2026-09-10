@@ -5,7 +5,7 @@
 1. Новые страницы разбиваются на перекрывающиеся смысловые фрагменты. Nomic Embeddings строит векторы в фоне, поэтому обычный поиск доступен ещё до завершения этой операции. Пустые и технические страницы отмечаются как `SKIPPED`, чтобы очередь не выбирала их повторно и гарантированно доходила до 100%.
 2. Запрос одновременно проходит через поиск по леммам и локальный HNSW-векторный индекс Lucene.
 3. Результаты объединяются методом Reciprocal Rank Fusion и фильтруются по выбранным источникам и правам пользователя.
-4. Контекст, профиль пользователя и ограниченная история отправляются в OpenAI-совместимый Responses API.
+4. Контекст, профиль пользователя и ограниченная история отправляются в OpenAI-совместимый Responses API выбранного провайдера.
 5. Ответ поступает в интерфейс частями. Пользователь видит этап обработки и может остановить генерацию.
 6. Тематики вычисляются в фоне по репрезентативным фрагментам коллекции и сохраняются в кэше. Ранжирование предпочитает цели, методы, результаты и выводы исследования и понижает библиографические, регистрационные и издательские блоки. Повторное открытие вкладки не запускает дорогой анализ заново.
 7. При недоступности embeddings или LLM система автоматически продолжает работать по леммам и формирует локальный ответ.
@@ -16,14 +16,42 @@
 
 ## Настройка
 
-OpenAI API можно использовать, но он не обязателен. В локальном режиме LM Studio укажите:
+В производственной среде используется Yandex AI Studio:
+
+```text
+LLM_PROVIDER=Yandex AI Studio
+OPENAI_ENABLED=true
+LLM_BASE_URL=https://ai.api.cloud.yandex.net/v1
+LLM_API_KEY=<секретный API-ключ>
+YANDEX_FOLDER_ID=<идентификатор каталога>
+LLM_MODEL=aliceai-llm
+LLM_BACKGROUND_PROVIDER=Yandex AI Studio
+LLM_BACKGROUND_BASE_URL=https://ai.api.cloud.yandex.net/v1
+LLM_BACKGROUND_MODEL=yandexgpt-5.1
+```
+
+Для API-ключа сервисному аккаунту нужна роль `ai.languageModels.user`. Клиент сам
+использует `Authorization: Api-Key` и формирует URI модели
+`gpt://<YANDEX_FOLDER_ID>/<LLM_MODEL>`.
+
+Для автоматического перехода на локальную Qwen при сбое облака задайте:
+
+```text
+LLM_FALLBACK_ENABLED=true
+LLM_FALLBACK_PROVIDER=local
+LLM_FALLBACK_BASE_URL=http://localhost:1235/v1
+LLM_FALLBACK_API_KEY=lm-studio
+LLM_FALLBACK_MODEL=local-qwen3-4b
+```
+
+В полностью локальном режиме LM Studio укажите:
 
 ```text
 LLM_PROVIDER=LM Studio
 OPENAI_ENABLED=true
-OPENAI_BASE_URL=http://localhost:1234/v1
-OPENAI_API_KEY=lm-studio
-OPENAI_MODEL=local-qwen3-8b
+LLM_BASE_URL=http://localhost:1234/v1
+LLM_API_KEY=lm-studio
+LLM_MODEL=local-qwen3-8b
 EMBEDDING_BASE_URL=http://localhost:1234/v1
 EMBEDDING_API_KEY=lm-studio
 EMBEDDING_MODEL=text-embedding-nomic-embed-text-v1.5
@@ -33,8 +61,8 @@ EMBEDDING_MODEL=text-embedding-nomic-embed-text-v1.5
 
 ```text
 OPENAI_ENABLED=true
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-5.6-terra
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_MODEL=gpt-5.6-terra
 OPENAI_REASONING_EFFORT=low
 OPENAI_MAX_OUTPUT_TOKENS=1600
 ASSISTANT_RATE_LIMIT_PER_MINUTE=30
@@ -46,7 +74,7 @@ ASSISTANT_RAG_MAX_DOCUMENTS=15
 ASSISTANT_RAG_CANDIDATES=64
 ```
 
-Код использует `POST /v1/responses`, повторы с учётом `Retry-After` при временных ошибках и Structured Outputs (JSON Schema) для анализа тематик. API-ключ не логируется и не возвращается клиенту.
+Код использует `POST /v1/responses`, повторы с учётом `Retry-After` при временных ошибках, автоматический резервный провайдер и Structured Outputs (JSON Schema) для анализа тематик. API-ключ не логируется и не возвращается клиенту.
 
 ChatGPT Plus/Pro не предоставляет API-кредиты: OpenAI API требует отдельного ключа и billing в API-проекте.
 
@@ -83,9 +111,9 @@ ChatGPT Plus/Pro не предоставляет API-кредиты: OpenAI API 
 
 ## Выбор модели
 
-`gpt-5.6-terra` выбран как практичный баланс качества, задержки и стоимости. Для наиболее сложного анализа можно задать `OPENAI_MODEL=gpt-5.6-sol`. Модель должна быть доступна API-проекту владельца ключа.
+`aliceai-llm` выбрана как флагманская русскоязычная модель для сложных диалоговых задач и извлечения информации из всего контекста. `yandexgpt-5.1` предназначена для RAG, анализа документов и структурированных результатов, поэтому используется для тематик. Локальная Qwen остаётся резервом без оплаты токенов.
 
-Официальные материалы: [Models](https://developers.openai.com/api/docs/models), [Latest model guide](https://developers.openai.com/api/docs/guides/latest-model), [API quickstart](https://platform.openai.com/docs/quickstart/make-your-first-api-request).
+Официальные материалы: [модели Yandex AI Studio](https://aistudio.yandex.ru/ru/docs/ai-studio/concepts/generation/models), [быстрый старт](https://aistudio.yandex.ru/ru/docs/ai-studio/quickstart/), [аутентификация](https://aistudio.yandex.ru/ru/docs/ai-studio/api-ref/authentication).
 
 ## Масштабирование
 

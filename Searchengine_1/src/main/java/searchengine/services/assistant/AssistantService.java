@@ -310,7 +310,7 @@ public class AssistantService {
     }
 
     public String getLlmProvider() {
-        return config.getLlm().getProvider();
+        return llmClient.getConfiguredProvider();
     }
 
     // ---------------------------------------------------------------------

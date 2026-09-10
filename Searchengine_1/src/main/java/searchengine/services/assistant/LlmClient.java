@@ -35,8 +35,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
- * Клиент OpenAI Responses API. Секрет читается только из конфигурации/переменной
- * окружения OPENAI_API_KEY и никогда не возвращается клиенту приложения.
+ * Клиент OpenAI-совместимого Responses API. Поддерживает OpenAI, Yandex AI Studio,
+ * локальные серверы и резервное переключение без передачи секрета клиенту приложения.
  */
 @Slf4j
 @Component
@@ -56,6 +56,7 @@ public class LlmClient {
     private final ConcurrentHashMap<String, CachedResponse> responseCache = new ConcurrentHashMap<>();
     private final LongAdder cacheHits = new LongAdder();
     private final LongAdder cacheMisses = new LongAdder();
+    private final LongAdder fallbackUses = new LongAdder();
 
     public LlmClient(AssistantConfig config, ObjectMapper objectMapper,
                      WebClient.Builder webClientBuilder) {
@@ -67,15 +68,20 @@ public class LlmClient {
     }
 
     public boolean isConfigured() {
-        AssistantConfig.Llm llm = config.getLlm();
-        return llm.isEnabled()
-                && hasText(llm.getApiKey())
-                && hasText(llm.getBaseUrl())
-                && hasText(llm.getModel());
+        return config.getLlm().isEnabled()
+                && (isProviderConfigured(provider(false)) || isProviderConfigured(fallbackProvider()));
     }
 
     public String getConfiguredModel() {
-        return config.getLlm().getModel();
+        ProviderConfig primary = provider(false);
+        ProviderConfig fallback = fallbackProvider();
+        return isProviderConfigured(primary) ? primary.model() : fallback.model();
+    }
+
+    public String getConfiguredProvider() {
+        ProviderConfig primary = provider(false);
+        ProviderConfig fallback = fallbackProvider();
+        return isProviderConfigured(primary) ? primary.displayName() : fallback.displayName();
     }
 
     public boolean isLocalProvider() {
@@ -84,7 +90,7 @@ public class LlmClient {
 
     /** Выполняет обычную текстовую генерацию. */
     public String complete(List<ChatMessage> messages) {
-        return execute(buildRequest(messages, null, null, null, false), false);
+        return execute(messages, null, null, null, false);
     }
 
     /**
@@ -92,7 +98,7 @@ public class LlmClient {
      * JSON, соответствующим переданной схеме.
      */
     public String completeJson(List<ChatMessage> messages, String schemaName, JsonNode schema) {
-        return execute(buildRequest(messages, schemaName, schema, null, false), false);
+        return execute(messages, schemaName, schema, null, false);
     }
 
     /**
@@ -101,60 +107,96 @@ public class LlmClient {
      */
     public String completeJsonBackground(List<ChatMessage> messages, String schemaName, JsonNode schema) {
         int tokenLimit = Math.max(128, config.getLlm().getBackgroundMaxOutputTokens());
-        return execute(buildRequest(messages, schemaName, schema, tokenLimit, true), true);
+        return execute(messages, schemaName, schema, tokenLimit, true);
     }
 
     /** Streams visible output text deltas from an OpenAI-compatible Responses endpoint. */
     public Flux<String> stream(List<ChatMessage> messages) {
-        if (!isConfigured()) return Flux.error(new LlmException("OpenAI API не настроен"));
-        Map<String, Object> body = buildRequest(messages, null, null, null, false);
-        body.put("stream", true);
-        String requestCacheKey = cacheKey(body);
+        if (!isConfigured()) return Flux.error(new LlmException("Языковая модель не настроена"));
+        ProviderConfig primary = provider(false);
+        ProviderConfig fallback = fallbackProvider();
+        Map<String, Object> primaryBody = isProviderConfigured(primary)
+                ? buildRequest(messages, null, null, null, false, primary) : null;
+        Map<String, Object> fallbackBody = isProviderConfigured(fallback)
+                ? buildRequest(messages, null, null, null, false, fallback) : null;
+        if (primaryBody != null) primaryBody.put("stream", true);
+        if (fallbackBody != null) fallbackBody.put("stream", true);
+        String requestCacheKey = cacheKey(primaryBody != null ? primaryBody : fallbackBody);
         AssistantConfig.Llm llm = config.getLlm();
         return Flux.defer(() -> {
                     String cached = cachedResponse(requestCacheKey);
                     if (cached != null) return Flux.just(cached);
                     acquireInteractiveGenerationSlot();
                     StringBuilder completedText = new StringBuilder();
-                    WebClient webClient = webClient(MediaType.TEXT_EVENT_STREAM_VALUE, false);
-                    return webClient.post().uri("/responses").bodyValue(body).retrieve()
-                            .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
-                            .handle((event, sink) -> {
-                                String data = event.data();
-                                if (data == null || data.isBlank() || "[DONE]".equals(data)) return;
-                                try {
-                                    JsonNode node = objectMapper.readTree(data);
-                                    String type = node.path("type").asText();
-                                    if ("response.output_text.delta".equals(type)) {
-                                        String delta = node.path("delta").asText();
-                                        if (!delta.isEmpty()) sink.next(delta);
-                                    } else if ("response.failed".equals(type)) {
-                                        sink.error(new LlmException(node.path("response").path("error")
-                                                .path("message").asText("Генерация завершилась ошибкой")));
+                    AtomicBoolean emittedByPrimary = new AtomicBoolean();
+                    boolean primaryAvailable = primaryBody != null && !isCircuitOpen();
+                    Flux<String> response;
+                    if (!primaryAvailable) {
+                        if (fallbackBody == null) {
+                            releaseGenerationSlot(false);
+                            return Flux.error(circuitUnavailableException());
+                        }
+                        fallbackUses.increment();
+                        response = streamFromProvider(fallbackBody, fallback,
+                                config.getLlm().getFallbackTimeoutSeconds());
+                    } else {
+                        response = streamFromProvider(primaryBody, primary, llm.getTimeoutSeconds())
+                                .doOnNext(delta -> emittedByPrimary.set(true))
+                                .doOnComplete(this::recordProviderSuccess)
+                                .onErrorResume(error -> {
+                                    recordProviderFailure(error);
+                                    if (fallbackBody == null || emittedByPrimary.get()) {
+                                        return Flux.error(error);
                                     }
-                                } catch (Exception exception) {
-                                    sink.error(new LlmException("Не удалось разобрать потоковый ответ", exception));
-                                }
-                            })
-                            .cast(String.class)
-                            .timeout(Duration.ofSeconds(Math.max(5, llm.getTimeoutSeconds())))
+                                    fallbackUses.increment();
+                                    log.warn("Основная LLM {} недоступна; переключаю запрос на {}: {}",
+                                            primary.displayName(), fallback.displayName(), error.getMessage());
+                                    return streamFromProvider(fallbackBody, fallback,
+                                            config.getLlm().getFallbackTimeoutSeconds());
+                                });
+                    }
+                    return response
                             .doOnNext(completedText::append)
                             .doOnComplete(() -> {
-                                recordProviderSuccess();
                                 cacheResponse(requestCacheKey, completedText.toString());
                             })
-                            .doOnError(this::recordProviderFailure)
                             .doFinally(signal -> releaseGenerationSlot(false));
                 });
+    }
+
+    private Flux<String> streamFromProvider(Map<String, Object> body, ProviderConfig provider,
+                                            int timeoutSeconds) {
+        return webClient(MediaType.TEXT_EVENT_STREAM_VALUE, provider)
+                .post().uri("/responses").bodyValue(body).retrieve()
+                .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
+                .handle((event, sink) -> {
+                    String data = event.data();
+                    if (data == null || data.isBlank() || "[DONE]".equals(data)) return;
+                    try {
+                        JsonNode node = objectMapper.readTree(data);
+                        String type = node.path("type").asText();
+                        if ("response.output_text.delta".equals(type)) {
+                            String delta = node.path("delta").asText();
+                            if (!delta.isEmpty()) sink.next(delta);
+                        } else if ("response.failed".equals(type)) {
+                            sink.error(new LlmException(node.path("response").path("error")
+                                    .path("message").asText("Генерация завершилась ошибкой")));
+                        }
+                    } catch (Exception exception) {
+                        sink.error(new LlmException("Не удалось разобрать потоковый ответ", exception));
+                    }
+                })
+                .cast(String.class)
+                .timeout(Duration.ofSeconds(Math.max(5, timeoutSeconds)));
     }
 
     private Map<String, Object> buildRequest(List<ChatMessage> messages,
                                              String schemaName, JsonNode schema,
                                              Integer outputTokenLimit,
-                                             boolean background) {
+                                             boolean background,
+                                             ProviderConfig provider) {
         AssistantConfig.Llm llm = config.getLlm();
-        ProviderConfig provider = provider(background);
-        boolean localEndpoint = isLocalEndpoint(provider.baseUrl());
+        boolean localEndpoint = provider.local();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", provider.model());
         body.put("store", false);
@@ -174,7 +216,7 @@ public class LlmClient {
         body.put("max_output_tokens", outputTokens);
         safetyIdentifier().ifPresent(value -> body.put("safety_identifier", value));
 
-        if (!localEndpoint && hasText(llm.getReasoningEffort())) {
+        if (provider.openAi() && hasText(llm.getReasoningEffort())) {
             body.put("reasoning", Map.of("effort", llm.getReasoningEffort()));
         }
 
@@ -254,12 +296,53 @@ public class LlmClient {
     private ProviderConfig provider(boolean background) {
         AssistantConfig.Llm llm = config.getLlm();
         if (!background || !hasText(llm.getBackgroundBaseUrl())) {
-            return new ProviderConfig(llm.getBaseUrl(), llm.getApiKey(), llm.getModel());
+            return providerConfig(llm.getProvider(), llm.getBaseUrl(), llm.getApiKey(),
+                    llm.getModel(), llm.getFolderId());
         }
-        return new ProviderConfig(
+        return providerConfig(
+                llm.getBackgroundProvider(),
                 llm.getBackgroundBaseUrl(),
                 hasText(llm.getBackgroundApiKey()) ? llm.getBackgroundApiKey() : llm.getApiKey(),
-                hasText(llm.getBackgroundModel()) ? llm.getBackgroundModel() : llm.getModel());
+                hasText(llm.getBackgroundModel()) ? llm.getBackgroundModel() : llm.getModel(),
+                hasText(llm.getBackgroundFolderId()) ? llm.getBackgroundFolderId() : llm.getFolderId());
+    }
+
+    private ProviderConfig fallbackProvider() {
+        AssistantConfig.Llm llm = config.getLlm();
+        if (!llm.isFallbackEnabled()) return ProviderConfig.disabled();
+        return providerConfig(llm.getFallbackProvider(), llm.getFallbackBaseUrl(),
+                llm.getFallbackApiKey(), llm.getFallbackModel(), llm.getFallbackFolderId());
+    }
+
+    private ProviderConfig providerConfig(String configuredName, String baseUrl, String apiKey,
+                                          String model, String folderId) {
+        String kind = providerKind(configuredName, baseUrl);
+        boolean yandex = "yandex".equals(kind);
+        String resolvedModel = model;
+        if (yandex && hasText(model) && !model.startsWith("gpt://") && hasText(folderId)) {
+            resolvedModel = "gpt://" + folderId.trim() + "/" + model.trim();
+        }
+        String displayName = switch (kind) {
+            case "yandex" -> "Yandex AI Studio";
+            case "local" -> hasText(configuredName) ? configuredName : "Локальная LLM";
+            default -> hasText(configuredName) ? configuredName : "OpenAI";
+        };
+        return new ProviderConfig(kind, displayName, baseUrl, apiKey, resolvedModel,
+                yandex, "openai".equals(kind), "local".equals(kind), folderId);
+    }
+
+    private String providerKind(String configuredName, String baseUrl) {
+        String value = configuredName == null ? "" : configuredName.toLowerCase(java.util.Locale.ROOT);
+        String endpoint = baseUrl == null ? "" : baseUrl.toLowerCase(java.util.Locale.ROOT);
+        if (value.contains("yandex") || endpoint.contains("ai.api.cloud.yandex.net")) return "yandex";
+        if (value.contains("local") || value.contains("lm studio") || isLocalEndpoint(baseUrl)) return "local";
+        return "openai";
+    }
+
+    private boolean isProviderConfigured(ProviderConfig provider) {
+        if (provider == null || !hasText(provider.apiKey()) || !hasText(provider.baseUrl())
+                || !hasText(provider.model())) return false;
+        return !provider.yandex() || provider.model().startsWith("gpt://") || hasText(provider.folderId());
     }
 
     private boolean isBackgroundProviderIsolated() {
@@ -269,11 +352,20 @@ public class LlmClient {
                 .equalsIgnoreCase(trimTrailingSlash(llm.getBaseUrl()));
     }
 
-    private String execute(Map<String, Object> body, boolean background) {
+    private String execute(List<ChatMessage> messages, String schemaName, JsonNode schema,
+                           Integer outputTokenLimit, boolean background) {
         if (!isConfigured()) {
-            throw new LlmException("OpenAI API не настроен");
+            throw new LlmException("Языковая модель не настроена");
         }
 
+        ProviderConfig primary = provider(background);
+        ProviderConfig fallback = fallbackProvider();
+        if (!isProviderConfigured(primary) && !isProviderConfigured(fallback)) {
+            throw new LlmException("Языковая модель не настроена");
+        }
+        Map<String, Object> body = isProviderConfigured(primary)
+                ? buildRequest(messages, schemaName, schema, outputTokenLimit, background, primary)
+                : buildRequest(messages, schemaName, schema, outputTokenLimit, background, fallback);
         String cacheKey = cacheKey(body);
         String cached = cachedResponse(cacheKey);
         if (cached != null) return cached;
@@ -289,13 +381,35 @@ public class LlmClient {
                     Math.max(5, config.getLlm().getBackgroundTimeoutSeconds()))
                     : config.getLlm().getTimeoutSeconds();
             int attempts = background ? 1 : Math.max(1, config.getLlm().getRetryAttempts());
-            String result = executeWithRetries(body, timeoutSeconds, attempts, background);
-            if (!background) recordProviderSuccess();
+            String result;
+            boolean primaryAvailable = isProviderConfigured(primary) && (background || !isCircuitOpen());
+            if (!primaryAvailable && isProviderConfigured(fallback)) {
+                fallbackUses.increment();
+                Map<String, Object> fallbackBody = buildRequest(messages, schemaName, schema,
+                        outputTokenLimit, false, fallback);
+                result = executeWithRetries(fallbackBody,
+                        config.getLlm().getFallbackTimeoutSeconds(), 1, false, fallback);
+            } else {
+                try {
+                    result = executeWithRetries(body, timeoutSeconds, attempts, background, primary);
+                    if (!background) recordProviderSuccess();
+                } catch (RuntimeException primaryError) {
+                    if (!isProviderConfigured(fallback)) throw primaryError;
+                    if (!background) recordProviderFailure(primaryError);
+                    fallbackUses.increment();
+                    log.warn("Основная LLM {} недоступна; переключаю запрос на {}: {}",
+                            primary.displayName(), fallback.displayName(), primaryError.getMessage());
+                    Map<String, Object> fallbackBody = buildRequest(messages, schemaName, schema,
+                            outputTokenLimit, background, fallback);
+                    result = executeWithRetries(fallbackBody,
+                            config.getLlm().getFallbackTimeoutSeconds(), 1, background, fallback);
+                }
+            }
             cacheResponse(cacheKey, result);
             return result;
         } catch (RuntimeException exception) {
             // Refreshable background work must never open the circuit for chat.
-            if (!background) recordProviderFailure(exception);
+            if (!background && !isProviderConfigured(fallback)) recordProviderFailure(exception);
             throw exception;
         } finally {
             if (background) {
@@ -312,12 +426,12 @@ public class LlmClient {
     }
 
     private String executeWithRetries(Map<String, Object> body, int timeoutSeconds, int attempts,
-                                      boolean background) {
+                                      boolean background, ProviderConfig provider) {
         RuntimeException lastError = null;
 
         for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
-                WebClient webClient = webClient(MediaType.APPLICATION_JSON_VALUE, background);
+                WebClient webClient = webClient(MediaType.APPLICATION_JSON_VALUE, provider);
 
                 String responseBody = webClient.post()
                         .uri("/responses")
@@ -328,7 +442,7 @@ public class LlmClient {
 
                 return extractOutputText(responseBody);
             } catch (WebClientResponseException e) {
-                lastError = new LlmException(safeProviderError(e), e);
+                lastError = new LlmException(safeProviderError(e, provider), e);
                 if (!isTransient(e.getRawStatusCode()) || attempt == attempts) {
                     throw lastError;
                 }
@@ -339,14 +453,15 @@ public class LlmClient {
                 if (Thread.currentThread().isInterrupted()) {
                     throw new LlmException("Фоновый LLM-анализ уступил интерактивному запросу", e);
                 }
-                lastError = new LlmException("OpenAI API временно недоступен", e);
+                lastError = new LlmException(provider.displayName() + " временно недоступна", e);
                 if (attempt == attempts) {
                     throw lastError;
                 }
                 sleepBeforeRetry(attempt, null);
             }
         }
-        throw lastError != null ? lastError : new LlmException("Не удалось получить ответ OpenAI API");
+        throw lastError != null ? lastError
+                : new LlmException("Не удалось получить ответ от " + provider.displayName());
     }
 
     public Map<String, Object> runtimeStatus() {
@@ -354,8 +469,15 @@ public class LlmClient {
         long openUntil = circuitOpenUntilMillis.get();
         Map<String, Object> status = new LinkedHashMap<>();
         status.put("configured", isConfigured());
-        status.put("provider", isLocalProvider() ? "local" : "remote");
+        ProviderConfig primary = provider(false);
+        ProviderConfig fallback = fallbackProvider();
+        boolean primaryConfigured = isProviderConfigured(primary);
+        ProviderConfig active = primaryConfigured ? primary : fallback;
+        status.put("provider", active.displayName());
+        status.put("providerType", active.kind());
         status.put("model", getConfiguredModel());
+        status.put("primaryConfigured", primaryConfigured);
+        status.put("primaryProvider", primary.displayName());
         status.put("circuit", openUntil > now ? "open" : "closed");
         status.put("circuitRetryAt", openUntil > now ? Instant.ofEpochMilli(openUntil).toString() : null);
         status.put("consecutiveFailures", consecutiveFailures.get());
@@ -368,17 +490,32 @@ public class LlmClient {
         status.put("cacheEntries", responseCache.size());
         status.put("cacheHits", cacheHits.sum());
         status.put("cacheMisses", cacheMisses.sum());
+        status.put("fallbackConfigured", isProviderConfigured(fallback));
+        status.put("fallbackProvider", isProviderConfigured(fallback) ? fallback.displayName() : null);
+        status.put("fallbackModel", isProviderConfigured(fallback) ? fallback.model() : null);
+        status.put("fallbackUses", fallbackUses.sum());
         return status;
     }
 
-    private WebClient webClient(String accept, boolean background) {
-        ProviderConfig provider = provider(background);
+    private WebClient webClient(String accept, ProviderConfig provider) {
+        String authorization = (provider.yandex() ? "Api-Key " : "Bearer ") + provider.apiKey();
         return webClientBuilder
                 .baseUrl(trimTrailingSlash(provider.baseUrl()))
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + provider.apiKey())
+                .defaultHeader(HttpHeaders.AUTHORIZATION, authorization)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .defaultHeader(HttpHeaders.ACCEPT, accept)
                 .build();
+    }
+
+    private boolean isCircuitOpen() {
+        return circuitOpenUntilMillis.get() > System.currentTimeMillis();
+    }
+
+    private LlmException circuitUnavailableException() {
+        long remaining = Math.max(1,
+                (circuitOpenUntilMillis.get() - System.currentTimeMillis() + 999) / 1000);
+        return new LlmException("Языковая модель восстанавливается после ошибок; повторите запрос через "
+                + remaining + " с");
     }
 
     private void assertCircuitAvailable() {
@@ -392,7 +529,7 @@ public class LlmClient {
     }
 
     private void acquireInteractiveGenerationSlot() {
-        assertCircuitAvailable();
+        if (isCircuitOpen() && !isProviderConfigured(fallbackProvider())) assertCircuitAvailable();
         interactiveWaiters.incrementAndGet();
         try {
             Thread background = !isBackgroundProviderIsolated() && generationSlots.availablePermits() == 0
@@ -513,7 +650,7 @@ public class LlmClient {
             JsonNode root = objectMapper.readTree(responseBody);
             JsonNode error = root.path("error");
             if (!error.isMissingNode() && !error.isNull()) {
-                throw new LlmException("OpenAI API вернул ошибку: " +
+                throw new LlmException("Провайдер LLM вернул ошибку: " +
                         error.path("message").asText("неизвестная ошибка"));
             }
 
@@ -543,26 +680,26 @@ public class LlmClient {
                 }
             }
             if (result.length() == 0) {
-                throw new LlmException("Ответ OpenAI не содержит output_text");
+                throw new LlmException("Ответ LLM не содержит output_text");
             }
             return result.toString().trim();
         } catch (LlmException e) {
             throw e;
         } catch (Exception e) {
-            throw new LlmException("Не удалось разобрать ответ OpenAI API", e);
+            throw new LlmException("Не удалось разобрать ответ LLM API", e);
         }
     }
 
-    private String safeProviderError(WebClientResponseException e) {
+    private String safeProviderError(WebClientResponseException e, ProviderConfig provider) {
         try {
             JsonNode root = objectMapper.readTree(e.getResponseBodyAsString());
             String message = root.path("error").path("message").asText();
             if (hasText(message)) {
-                return "OpenAI API: HTTP " + e.getRawStatusCode() + ": " + message;
+                return provider.displayName() + ": HTTP " + e.getRawStatusCode() + ": " + message;
             }
         } catch (Exception ignored) {
         }
-        return "OpenAI API: HTTP " + e.getRawStatusCode();
+        return provider.displayName() + ": HTTP " + e.getRawStatusCode();
     }
 
     private boolean isTransient(int status) {
@@ -581,7 +718,7 @@ public class LlmClient {
             Thread.sleep(delayMillis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new LlmException("Ожидание повторного вызова OpenAI прервано", e);
+            throw new LlmException("Ожидание повторного вызова LLM прервано", e);
         }
     }
 
@@ -627,6 +764,12 @@ public class LlmClient {
     private record CachedResponse(String text, long expiresAtMillis) {
     }
 
-    private record ProviderConfig(String baseUrl, String apiKey, String model) {
+    private record ProviderConfig(String kind, String displayName, String baseUrl, String apiKey,
+                                  String model, boolean yandex, boolean openAi, boolean local,
+                                  String folderId) {
+        private static ProviderConfig disabled() {
+            return new ProviderConfig("disabled", "Резервная LLM", "", "", "",
+                    false, false, false, "");
+        }
     }
 }

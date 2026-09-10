@@ -375,6 +375,146 @@ class LlmClientTest {
                 .containsEntry("consecutiveFailures", 2);
     }
 
+    @Test
+    void yandexProviderUsesApiKeyAndQualifiedModelUri() throws Exception {
+        AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/responses", exchange -> {
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] bytes = "{\"status\":\"completed\",\"output_text\":\"Ответ Alice AI\"}"
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+        server.start();
+
+        AssistantConfig config = new AssistantConfig();
+        config.getLlm().setProvider("Yandex AI Studio");
+        config.getLlm().setBaseUrl("http://localhost:" + server.getAddress().getPort());
+        config.getLlm().setApiKey("yandex-secret");
+        config.getLlm().setFolderId("folder-123");
+        config.getLlm().setModel("aliceai-llm");
+        config.getLlm().setRetryAttempts(1);
+        LlmClient client = new LlmClient(config, new ObjectMapper(), WebClient.builder());
+
+        assertThat(client.complete(List.of(new ChatMessage("user", "Научный вопрос"))))
+                .isEqualTo("Ответ Alice AI");
+        JsonNode body = new ObjectMapper().readTree(requestBody.get());
+        assertThat(authorization.get()).isEqualTo("Api-Key yandex-secret");
+        assertThat(body.path("model").asText()).isEqualTo("gpt://folder-123/aliceai-llm");
+        assertThat(body.has("reasoning")).isFalse();
+        assertThat(body.path("input").get(0).path("content").asText()).isEqualTo("Научный вопрос");
+        assertThat(client.runtimeStatus()).containsEntry("provider", "Yandex AI Studio")
+                .containsEntry("providerType", "yandex");
+    }
+
+    @Test
+    void failedPrimaryProviderFallsBackToLocalModel() throws Exception {
+        AtomicInteger primaryCalls = new AtomicInteger();
+        AtomicInteger fallbackCalls = new AtomicInteger();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/responses", exchange -> {
+            primaryCalls.incrementAndGet();
+            exchange.getRequestBody().readAllBytes();
+            exchange.sendResponseHeaders(503, -1);
+            exchange.close();
+        });
+        server.start();
+
+        HttpServer fallbackServer = HttpServer.create(new InetSocketAddress(0), 0);
+        try {
+            fallbackServer.createContext("/responses", exchange -> {
+                fallbackCalls.incrementAndGet();
+                exchange.getRequestBody().readAllBytes();
+                byte[] bytes = "{\"status\":\"completed\",\"output_text\":\"Локальный ответ\"}"
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().add("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, bytes.length);
+                exchange.getResponseBody().write(bytes);
+                exchange.close();
+            });
+            fallbackServer.start();
+
+            AssistantConfig config = configured();
+            config.getLlm().setFallbackEnabled(true);
+            config.getLlm().setFallbackProvider("local");
+            config.getLlm().setFallbackBaseUrl(
+                    "http://127.0.0.1:" + fallbackServer.getAddress().getPort());
+            config.getLlm().setFallbackApiKey("local-key");
+            config.getLlm().setFallbackModel("local-qwen");
+            LlmClient client = new LlmClient(config, new ObjectMapper(), WebClient.builder());
+
+            assertThat(client.complete(List.of(new ChatMessage("user", "Вопрос"))))
+                    .isEqualTo("Локальный ответ");
+            assertThat(primaryCalls).hasValue(1);
+            assertThat(fallbackCalls).hasValue(1);
+            assertThat(client.runtimeStatus()).containsEntry("fallbackConfigured", true)
+                    .containsEntry("fallbackUses", 1L);
+        } finally {
+            fallbackServer.stop(0);
+        }
+    }
+
+    @Test
+    void failedBackgroundProviderFallsBackWithoutOpeningInteractiveCircuit() throws Exception {
+        AtomicInteger primaryCalls = new AtomicInteger();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/responses", exchange -> {
+            primaryCalls.incrementAndGet();
+            exchange.getRequestBody().readAllBytes();
+            exchange.sendResponseHeaders(503, -1);
+            exchange.close();
+        });
+        server.start();
+
+        HttpServer fallbackServer = HttpServer.create(new InetSocketAddress(0), 0);
+        try {
+            fallbackServer.createContext("/responses", exchange -> {
+                exchange.getRequestBody().readAllBytes();
+                byte[] bytes = "{\"status\":\"completed\",\"output_text\":\"{\\\"topics\\\":[]}\"}"
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().add("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, bytes.length);
+                exchange.getResponseBody().write(bytes);
+                exchange.close();
+            });
+            fallbackServer.start();
+
+            ObjectMapper mapper = new ObjectMapper();
+            AssistantConfig config = configured();
+            config.getLlm().setBackgroundProvider("Yandex AI Studio");
+            config.getLlm().setBackgroundBaseUrl(
+                    "http://127.0.0.1:" + server.getAddress().getPort());
+            config.getLlm().setBackgroundApiKey("yandex-key");
+            config.getLlm().setBackgroundFolderId("folder-123");
+            config.getLlm().setBackgroundModel("yandexgpt-5.1");
+            config.getLlm().setFallbackEnabled(true);
+            config.getLlm().setFallbackProvider("local");
+            config.getLlm().setFallbackBaseUrl(
+                    "http://127.0.0.1:" + fallbackServer.getAddress().getPort());
+            config.getLlm().setFallbackApiKey("local-key");
+            config.getLlm().setFallbackModel("local-qwen");
+            LlmClient client = new LlmClient(config, mapper, WebClient.builder());
+
+            String result = client.completeJsonBackground(
+                    List.of(new ChatMessage("user", "Определи темы")),
+                    "topics", mapper.readTree("""
+                            {"type":"object","properties":{"topics":{"type":"array"}}}
+                            """));
+
+            assertThat(result).isEqualTo("{\"topics\":[]}");
+            assertThat(primaryCalls).hasValue(1);
+            assertThat(client.runtimeStatus()).containsEntry("fallbackUses", 1L)
+                    .containsEntry("circuit", "closed");
+        } finally {
+            fallbackServer.stop(0);
+        }
+    }
+
     private AssistantConfig configured() {
         AssistantConfig config = new AssistantConfig();
         config.getLlm().setApiKey("test-key");

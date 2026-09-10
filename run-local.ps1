@@ -20,7 +20,14 @@ function Get-LocalEnvValue {
 }
 
 $llmProvider = Get-LocalEnvValue 'LLM_PROVIDER'
-if ($llmProvider -match '(?i)lm\s*studio') {
+$embeddingBaseUrl = Get-LocalEnvValue 'EMBEDDING_BASE_URL'
+$fallbackEnabled = Get-LocalEnvValue 'LLM_FALLBACK_ENABLED'
+$fallbackBaseUrl = Get-LocalEnvValue 'LLM_FALLBACK_BASE_URL'
+$needsLmStudio = $llmProvider -match '(?i)lm\s*studio' `
+    -or $embeddingBaseUrl -match '(?i)^https?://(localhost|127\.0\.0\.1):1234' `
+    -or (($fallbackEnabled -match '(?i)^(true|1|yes)$') `
+        -and $fallbackBaseUrl -match '(?i)^https?://(localhost|127\.0\.0\.1):1234')
+if ($needsLmStudio) {
     $lmsExecutable = Join-Path $env:USERPROFILE '.lmstudio\bin\lms.exe'
     if (-not (Test-Path -LiteralPath $lmsExecutable)) {
         Write-Warning 'LM Studio CLI is not installed. The assistant will use its local fallback mode.'
@@ -39,7 +46,14 @@ if ($llmProvider -match '(?i)lm\s*studio') {
         if (-not $llmReady) {
             Write-Warning 'LM Studio API failed to start on port 1234. The assistant will use its local fallback mode.'
         } else {
-            $llmModel = Get-LocalEnvValue 'OPENAI_MODEL'
+            $llmModel = if ($llmProvider -match '(?i)lm\s*studio') {
+                Get-LocalEnvValue 'LLM_MODEL'
+            } else {
+                Get-LocalEnvValue 'LLM_FALLBACK_MODEL'
+            }
+            if ([string]::IsNullOrWhiteSpace($llmModel)) {
+                $llmModel = Get-LocalEnvValue 'OPENAI_MODEL'
+            }
             if ([string]::IsNullOrWhiteSpace($llmModel)) {
                 $llmModel = 'local-qwen3-8b'
             }

@@ -78,7 +78,8 @@ $env:DB_URL="jdbc:postgresql://localhost:5432/search_engine"
 $env:DB_USERNAME="postgres"
 $env:DB_PASSWORD="change-me"
 $env:APP_ADMIN_PASSWORD="change-me-too"
-$env:OPENAI_API_KEY="your-api-key"
+$env:LLM_API_KEY="your-yandex-api-key"
+$env:YANDEX_FOLDER_ID="your-folder-id"
 ```
 
 Пример для Bash:
@@ -88,7 +89,8 @@ export DB_URL='jdbc:postgresql://localhost:5432/search_engine'
 export DB_USERNAME='postgres'
 export DB_PASSWORD='change-me'
 export APP_ADMIN_PASSWORD='change-me-too'
-export OPENAI_API_KEY='your-api-key'
+export LLM_API_KEY='your-yandex-api-key'
+export YANDEX_FOLDER_ID='your-folder-id'
 ```
 
 3. Запустите приложение:
@@ -113,13 +115,26 @@ ALTER USER postgres WITH PASSWORD 'новый-надежный-пароль';
 
 Затем запишите этот пароль только в локальный `.env`. Не добавляйте `.env` в Git.
 
-## OpenAI
+## Yandex AI Studio
 
-По умолчанию используется `gpt-5.6-terra` через Responses API; модель можно заменить переменной `OPENAI_MODEL`. Для более сложных задач можно выбрать `gpt-5.6-sol`, для более дешёвых массовых запросов — подходящую меньшую модель из доступных вашему API-проекту.
+Производственная конфигурация использует флагманскую `Alice AI LLM` через совместимый Responses API Yandex AI Studio. Она формирует ответы по найденному RAG-контексту, а `YandexGPT Pro 5.1` выполняет структурированный анализ тематик. Для подключения создайте сервисный аккаунт с ролью `ai.languageModels.user`, API-ключ и укажите:
 
-Подписка ChatGPT Plus/Pro и использование OpenAI API оплачиваются отдельно. Нужен API-ключ платформы OpenAI и активный API billing. Ключ передаётся только через `OPENAI_API_KEY` и никогда не должен попадать в Git.
+```text
+LLM_PROVIDER=Yandex AI Studio
+LLM_BASE_URL=https://ai.api.cloud.yandex.net/v1
+LLM_API_KEY=<секретный API-ключ>
+YANDEX_FOLDER_ID=<идентификатор каталога>
+LLM_MODEL=aliceai-llm
+LLM_BACKGROUND_PROVIDER=Yandex AI Studio
+LLM_BACKGROUND_BASE_URL=https://ai.api.cloud.yandex.net/v1
+LLM_BACKGROUND_MODEL=yandexgpt-5.1
+```
 
-Если ключ отсутствует или API временно недоступен, поиск продолжает работать, а ассистент формирует локальный ответ из найденных фрагментов.
+Клиент автоматически формирует URI `gpt://<folder-id>/<model>` и использует схему авторизации `Authorization: Api-Key`. Секрет хранится только в `.env` сервера и не должен попадать в Git.
+
+Если облачный API временно недоступен, запрос автоматически переключается на локальную Qwen. Если обе модели недоступны, поиск продолжает работать и ассистент показывает найденные фрагменты.
+
+OpenAI также остаётся совместимым провайдером. Подписка ChatGPT Plus/Pro и OpenAI API оплачиваются отдельно.
 
 ### Бесплатный локальный режим LM Studio
 
@@ -128,9 +143,9 @@ API OpenAI не обязателен. Для работы без оплаты т
 ```text
 LLM_PROVIDER=LM Studio
 OPENAI_ENABLED=true
-OPENAI_BASE_URL=http://localhost:1234/v1
-OPENAI_API_KEY=lm-studio
-OPENAI_MODEL=local-qwen3-8b
+LLM_BASE_URL=http://localhost:1234/v1
+LLM_API_KEY=lm-studio
+LLM_MODEL=local-qwen3-8b
 ```
 
 `run-local.ps1` запускает локальный API LM Studio и загружает модель, если CLI установлен. Ответы и LLM-анализ тематик при этом не покидают компьютер.

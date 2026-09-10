@@ -71,7 +71,7 @@ spring:
 
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master_topic.xml  # Файл с миграциями
-# Настройки LLM-ассистента (вкладка «Ассистент»), использующего OpenAI Responses API.
+# Настройки LLM-ассистента (вкладка «Ассистент»), использующего OpenAI-совместимый Responses API.
 # Ключ и модель задаются только через переменные окружения.
 # Если ключ не задан — ассистент работает в резервном режиме
 # (находит документы и формирует ответ из их фрагментов).
@@ -79,9 +79,10 @@ assistant:
   llm:
     enabled: ${OPENAI_ENABLED:true}
     provider: ${LLM_PROVIDER:OpenAI}
-    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
-    api-key: ${OPENAI_API_KEY:}
-    model: ${OPENAI_MODEL:gpt-5.6-terra}
+    folder-id: ${YANDEX_FOLDER_ID:${LLM_FOLDER_ID:}}
+    base-url: ${LLM_BASE_URL:${OPENAI_BASE_URL:https://api.openai.com/v1}}
+    api-key: ${LLM_API_KEY:${OPENAI_API_KEY:}}
+    model: ${LLM_MODEL:${OPENAI_MODEL:gpt-5.6-terra}}
     reasoning-effort: ${OPENAI_REASONING_EFFORT:low}
     max-output-tokens: ${OPENAI_MAX_OUTPUT_TOKENS:1600}
     timeout-seconds: ${OPENAI_TIMEOUT_SECONDS:60}
@@ -90,9 +91,18 @@ assistant:
     queue-timeout-millis: ${OPENAI_QUEUE_TIMEOUT_MILLIS:500}
     background-timeout-seconds: ${OPENAI_BACKGROUND_TIMEOUT_SECONDS:45}
     background-max-output-tokens: ${OPENAI_BACKGROUND_MAX_OUTPUT_TOKENS:192}
-    background-base-url: ${OPENAI_BACKGROUND_BASE_URL:}
-    background-api-key: ${OPENAI_BACKGROUND_API_KEY:}
-    background-model: ${OPENAI_BACKGROUND_MODEL:}
+    background-provider: ${LLM_BACKGROUND_PROVIDER:}
+    background-folder-id: ${YANDEX_BACKGROUND_FOLDER_ID:${LLM_BACKGROUND_FOLDER_ID:}}
+    background-base-url: ${LLM_BACKGROUND_BASE_URL:${OPENAI_BACKGROUND_BASE_URL:}}
+    background-api-key: ${LLM_BACKGROUND_API_KEY:${OPENAI_BACKGROUND_API_KEY:}}
+    background-model: ${LLM_BACKGROUND_MODEL:${OPENAI_BACKGROUND_MODEL:}}
+    fallback-enabled: ${LLM_FALLBACK_ENABLED:false}
+    fallback-provider: ${LLM_FALLBACK_PROVIDER:local}
+    fallback-folder-id: ${LLM_FALLBACK_FOLDER_ID:}
+    fallback-base-url: ${LLM_FALLBACK_BASE_URL:}
+    fallback-api-key: ${LLM_FALLBACK_API_KEY:}
+    fallback-model: ${LLM_FALLBACK_MODEL:}
+    fallback-timeout-seconds: ${LLM_FALLBACK_TIMEOUT_SECONDS:120}
     circuit-failure-threshold: ${OPENAI_CIRCUIT_FAILURE_THRESHOLD:3}
     circuit-cooldown-seconds: ${OPENAI_CIRCUIT_COOLDOWN_SECONDS:30}
     response-cache-ttl-seconds: ${OPENAI_RESPONSE_CACHE_TTL_SECONDS:300}
