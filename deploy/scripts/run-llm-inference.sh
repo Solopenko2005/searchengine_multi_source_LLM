@@ -32,7 +32,8 @@ fi
 set -- "${BACKEND}" --model "${MODEL}" --host 0.0.0.0 --port "${PORT}" \
   --no-webui --jinja --ctx-size "${CONTEXT}" --parallel 1 \
   --batch-size 2048 --ubatch-size 512 --threads "${THREADS}" \
-  --threads-batch "${THREADS}" --cache-type-k f16 --cache-type-v f16
+  --threads-batch "${THREADS}" --cache-type-k f16 --cache-type-v f16 \
+  --reasoning off --reasoning-budget 0 --reasoning-format none
 
 if [ -n "${LLM_API_KEY:-}" ]; then
   set -- "$@" --api-key "${LLM_API_KEY}"
