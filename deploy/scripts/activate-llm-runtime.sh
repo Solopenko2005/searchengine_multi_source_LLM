@@ -39,7 +39,7 @@ upsert_env LLM_BACKGROUND_NICE 10
 upsert_env EMBEDDING_BASE_URL http://host.docker.internal:1234/v1
 upsert_env ASSISTANT_RAG_LOCAL_CONTEXT_CHARS 720
 upsert_env OPENAI_MAX_OUTPUT_TOKENS 128
-upsert_env OPENAI_BACKGROUND_TIMEOUT_SECONDS 35
+upsert_env OPENAI_BACKGROUND_TIMEOUT_SECONDS 45
 upsert_env OPENAI_BACKGROUND_MAX_OUTPUT_TOKENS 192
 
 # The production LM Studio server and the dedicated llama-server use the same
