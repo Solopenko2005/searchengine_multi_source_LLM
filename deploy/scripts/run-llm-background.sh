@@ -32,7 +32,7 @@ set -- "${BACKEND}" --model "${MODEL}" --alias "${LLM_BACKGROUND_MODEL:-local-qw
   --ctx-size "${CONTEXT}" --parallel 1 --batch-size 1024 --ubatch-size 256 \
   --threads "${THREADS}" --threads-batch "${THREADS}" \
   --cache-type-k f16 --cache-type-v f16 \
-  --reasoning off --reasoning-budget 0 --reasoning-format none
+  --reasoning off --reasoning-budget 0
 
 if [ -n "${LLM_API_KEY:-}" ]; then
   set -- "$@" --api-key "${LLM_API_KEY}"
