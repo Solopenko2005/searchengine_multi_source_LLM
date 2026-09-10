@@ -37,6 +37,7 @@ const sloProfile = arg("slo-profile", "interactive-default");
 const ttftP95LimitMs = Math.max(1, Number(arg("ttft-p95-ms", "5000")));
 const totalP95LimitMs = Math.max(1, Number(arg("total-p95-ms", "20000")));
 const requestRetries = Math.min(2, Math.max(0, Number(arg("request-retries", "1"))));
+const startBackgroundTopicRefresh = arg("background-topic-refresh", "false").toLowerCase() === "true";
 const inviteCode = inviteFile && fs.existsSync(path.resolve(inviteFile))
   ? fs.readFileSync(path.resolve(inviteFile), "utf8").trim() : "";
 const env = { ...parseEnv(path.resolve(arg("credentials-file", ".env"))), ...process.env };
@@ -141,6 +142,19 @@ async function createSession(credential) {
 }
 
 const sessions = await Promise.all(credentials.slice(0, concurrency).map(createSession));
+
+if (startBackgroundTopicRefresh) {
+  const launches = await Promise.all(sessions.map(session => session.fetch("/api/assistant/topics/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-XSRF-TOKEN": session.csrf },
+    body: "{}",
+  })));
+  if (launches.some(response => response.status !== 200)) {
+    throw new Error(`Background topic refresh failed: ${launches.map(response => response.status).join(", ")}`);
+  }
+  // Give the background executor a chance to reach the LLM before chat starts.
+  await new Promise(resolve => setTimeout(resolve, 750));
+}
 
 const questions = [
   "Какие основные научные методы представлены в моих источниках?",
@@ -247,6 +261,7 @@ const report = {
   concurrency,
   iterations,
   requestRetries,
+  startBackgroundTopicRefresh,
   summary: {
     successful,
     failed: iterations - successful,

@@ -87,6 +87,18 @@ public class AssistantConfig {
         /** Компактный лимит ответа для фоновых structured-задач локальной модели. */
         private int backgroundMaxOutputTokens = 320;
 
+        /**
+         * Отдельный OpenAI-совместимый endpoint для фонового анализа тематик.
+         * Пустое значение сохраняет однопроцессный режим с приоритетом диалога.
+         */
+        private String backgroundBaseUrl = "";
+
+        /** Пустое значение повторно использует основной API-ключ. */
+        private String backgroundApiKey = "";
+
+        /** Пустое значение повторно использует основную модель. */
+        private String backgroundModel = "";
+
         /** После скольких последовательных ошибок временно разомкнуть цепь вызовов. */
         private int circuitFailureThreshold = 3;
 

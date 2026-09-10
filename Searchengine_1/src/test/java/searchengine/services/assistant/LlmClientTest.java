@@ -190,6 +190,79 @@ class LlmClientTest {
     }
 
     @Test
+    void isolatedBackgroundProviderDoesNotOccupyInteractiveSlot() throws Exception {
+        CountDownLatch backgroundStarted = new CountDownLatch(1);
+        HttpServer backgroundServer = HttpServer.create(new InetSocketAddress(0), 0);
+        ExecutorService caller = Executors.newSingleThreadExecutor();
+        try {
+            backgroundServer.createContext("/responses", exchange -> {
+                exchange.getRequestBody().readAllBytes();
+                backgroundStarted.countDown();
+                try {
+                    Thread.sleep(750);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+                byte[] bytes = "{\"status\":\"completed\",\"output_text\":\"{\\\"topics\\\":[]}\"}"
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().add("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, bytes.length);
+                exchange.getResponseBody().write(bytes);
+                exchange.close();
+            });
+            backgroundServer.start();
+
+            server = HttpServer.create(new InetSocketAddress(0), 0);
+            server.createContext("/responses", exchange -> {
+                exchange.getRequestBody().readAllBytes();
+                byte[] bytes = """
+                        event: response.output_text.delta
+                        data: {"type":"response.output_text.delta","delta":"Ответ без ожидания"}
+
+                        data: [DONE]
+
+                        """.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().add("Content-Type", "text/event-stream; charset=utf-8");
+                exchange.sendResponseHeaders(200, bytes.length);
+                exchange.getResponseBody().write(bytes);
+                exchange.close();
+            });
+            server.start();
+
+            ObjectMapper mapper = new ObjectMapper();
+            AssistantConfig config = new AssistantConfig();
+            config.getLlm().setApiKey("interactive-key");
+            config.getLlm().setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
+            config.getLlm().setModel("interactive-model");
+            config.getLlm().setBackgroundBaseUrl(
+                    "http://127.0.0.1:" + backgroundServer.getAddress().getPort());
+            config.getLlm().setBackgroundApiKey("background-key");
+            config.getLlm().setBackgroundModel("background-model");
+            config.getLlm().setMaxConcurrentRequests(1);
+            config.getLlm().setRetryAttempts(1);
+            LlmClient client = new LlmClient(config, mapper, WebClient.builder());
+
+            Future<String> background = caller.submit(() -> client.completeJsonBackground(
+                    List.of(new ChatMessage("user", "background topic request")),
+                    "topics", mapper.readTree("""
+                            {"type":"object","properties":{"topics":{"type":"array"}}}
+                            """)));
+            assertThat(backgroundStarted.await(3, TimeUnit.SECONDS)).isTrue();
+
+            List<String> deltas = client.stream(List.of(new ChatMessage("user", "interactive question")))
+                    .collectList().block(Duration.ofSeconds(3));
+
+            assertThat(deltas).containsExactly("Ответ без ожидания");
+            assertThat(background.get(3, TimeUnit.SECONDS)).isEqualTo("{\"topics\":[]}");
+            assertThat(client.runtimeStatus()).containsEntry("backgroundIsolated", true)
+                    .containsEntry("backgroundModel", "background-model");
+        } finally {
+            caller.shutdownNow();
+            backgroundServer.stop(0);
+        }
+    }
+
+    @Test
     void blankApiKeyDisablesExternalCalls() {
         AssistantConfig config = new AssistantConfig();
         config.getLlm().setApiKey(" ");

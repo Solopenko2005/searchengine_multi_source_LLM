@@ -1,0 +1,23 @@
+[Unit]
+Description=Low-priority Qwen server for Scientific Search topic analysis
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=scientific
+Group=scientific
+Environment=HOME=/home/scientific
+EnvironmentFile=/home/scientific/app/deploy/.env.production
+WorkingDirectory=/home/scientific/app
+ExecStart=/home/scientific/app/deploy/scripts/run-llm-background.sh
+Restart=always
+RestartSec=5
+TimeoutStartSec=180
+TimeoutStopSec=30
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

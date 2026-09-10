@@ -46,6 +46,7 @@ public class LlmClient {
     private final ObjectMapper objectMapper;
     private final WebClient.Builder webClientBuilder;
     private final Semaphore generationSlots;
+    private final Semaphore backgroundGenerationSlots;
     private final AtomicInteger inFlight = new AtomicInteger();
     private final AtomicInteger interactiveWaiters = new AtomicInteger();
     private final AtomicReference<Thread> backgroundGenerationThread = new AtomicReference<>();
@@ -62,6 +63,7 @@ public class LlmClient {
         this.objectMapper = objectMapper;
         this.webClientBuilder = webClientBuilder;
         this.generationSlots = new Semaphore(Math.max(1, config.getLlm().getMaxConcurrentRequests()), true);
+        this.backgroundGenerationSlots = new Semaphore(1, true);
     }
 
     public boolean isConfigured() {
@@ -82,7 +84,7 @@ public class LlmClient {
 
     /** Выполняет обычную текстовую генерацию. */
     public String complete(List<ChatMessage> messages) {
-        return execute(buildRequest(messages, null, null, null), false);
+        return execute(buildRequest(messages, null, null, null, false), false);
     }
 
     /**
@@ -90,7 +92,7 @@ public class LlmClient {
      * JSON, соответствующим переданной схеме.
      */
     public String completeJson(List<ChatMessage> messages, String schemaName, JsonNode schema) {
-        return execute(buildRequest(messages, schemaName, schema, null), false);
+        return execute(buildRequest(messages, schemaName, schema, null, false), false);
     }
 
     /**
@@ -99,13 +101,13 @@ public class LlmClient {
      */
     public String completeJsonBackground(List<ChatMessage> messages, String schemaName, JsonNode schema) {
         int tokenLimit = Math.max(128, config.getLlm().getBackgroundMaxOutputTokens());
-        return execute(buildRequest(messages, schemaName, schema, tokenLimit), true);
+        return execute(buildRequest(messages, schemaName, schema, tokenLimit, true), true);
     }
 
     /** Streams visible output text deltas from an OpenAI-compatible Responses endpoint. */
     public Flux<String> stream(List<ChatMessage> messages) {
         if (!isConfigured()) return Flux.error(new LlmException("OpenAI API не настроен"));
-        Map<String, Object> body = buildRequest(messages, null, null, null);
+        Map<String, Object> body = buildRequest(messages, null, null, null, false);
         body.put("stream", true);
         String requestCacheKey = cacheKey(body);
         AssistantConfig.Llm llm = config.getLlm();
@@ -114,7 +116,7 @@ public class LlmClient {
                     if (cached != null) return Flux.just(cached);
                     acquireInteractiveGenerationSlot();
                     StringBuilder completedText = new StringBuilder();
-                    WebClient webClient = webClient(MediaType.TEXT_EVENT_STREAM_VALUE);
+                    WebClient webClient = webClient(MediaType.TEXT_EVENT_STREAM_VALUE, false);
                     return webClient.post().uri("/responses").bodyValue(body).retrieve()
                             .bodyToFlux(new ParameterizedTypeReference<ServerSentEvent<String>>() {})
                             .handle((event, sink) -> {
@@ -142,17 +144,19 @@ public class LlmClient {
                                 cacheResponse(requestCacheKey, completedText.toString());
                             })
                             .doOnError(this::recordProviderFailure)
-                            .doFinally(signal -> releaseGenerationSlot());
+                            .doFinally(signal -> releaseGenerationSlot(false));
                 });
     }
 
     private Map<String, Object> buildRequest(List<ChatMessage> messages,
                                              String schemaName, JsonNode schema,
-                                             Integer outputTokenLimit) {
+                                             Integer outputTokenLimit,
+                                             boolean background) {
         AssistantConfig.Llm llm = config.getLlm();
-        boolean localEndpoint = isLocalEndpoint(llm.getBaseUrl());
+        ProviderConfig provider = provider(background);
+        boolean localEndpoint = isLocalEndpoint(provider.baseUrl());
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", llm.getModel());
+        body.put("model", provider.model());
         body.put("store", false);
         int outputTokens = Math.max(128, llm.getMaxOutputTokens());
         if (localEndpoint) {
@@ -230,7 +234,7 @@ public class LlmClient {
                     .mapToInt(String::length)
                     .sum();
             log.debug("LLM request model={}, local={}, inputChars={}, outputTokens={}, structured={}",
-                    llm.getModel(), localEndpoint, inputChars, outputTokens, schema != null);
+                    provider.model(), localEndpoint, inputChars, outputTokens, schema != null);
         }
         return body;
     }
@@ -245,6 +249,24 @@ public class LlmClient {
         } catch (RuntimeException ignored) {
             return false;
         }
+    }
+
+    private ProviderConfig provider(boolean background) {
+        AssistantConfig.Llm llm = config.getLlm();
+        if (!background || !hasText(llm.getBackgroundBaseUrl())) {
+            return new ProviderConfig(llm.getBaseUrl(), llm.getApiKey(), llm.getModel());
+        }
+        return new ProviderConfig(
+                llm.getBackgroundBaseUrl(),
+                hasText(llm.getBackgroundApiKey()) ? llm.getBackgroundApiKey() : llm.getApiKey(),
+                hasText(llm.getBackgroundModel()) ? llm.getBackgroundModel() : llm.getModel());
+    }
+
+    private boolean isBackgroundProviderIsolated() {
+        AssistantConfig.Llm llm = config.getLlm();
+        return hasText(llm.getBackgroundBaseUrl())
+                && !trimTrailingSlash(llm.getBackgroundBaseUrl())
+                .equalsIgnoreCase(trimTrailingSlash(llm.getBaseUrl()));
     }
 
     private String execute(Map<String, Object> body, boolean background) {
@@ -267,7 +289,7 @@ public class LlmClient {
                     Math.max(5, config.getLlm().getBackgroundTimeoutSeconds()))
                     : config.getLlm().getTimeoutSeconds();
             int attempts = background ? 1 : Math.max(1, config.getLlm().getRetryAttempts());
-            String result = executeWithRetries(body, timeoutSeconds, attempts);
+            String result = executeWithRetries(body, timeoutSeconds, attempts, background);
             if (!background) recordProviderSuccess();
             cacheResponse(cacheKey, result);
             return result;
@@ -285,16 +307,17 @@ public class LlmClient {
                     Thread.interrupted();
                 }
             }
-            releaseGenerationSlot();
+            releaseGenerationSlot(background);
         }
     }
 
-    private String executeWithRetries(Map<String, Object> body, int timeoutSeconds, int attempts) {
+    private String executeWithRetries(Map<String, Object> body, int timeoutSeconds, int attempts,
+                                      boolean background) {
         RuntimeException lastError = null;
 
         for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
-                WebClient webClient = webClient(MediaType.APPLICATION_JSON_VALUE);
+                WebClient webClient = webClient(MediaType.APPLICATION_JSON_VALUE, background);
 
                 String responseBody = webClient.post()
                         .uri("/responses")
@@ -339,6 +362,8 @@ public class LlmClient {
         status.put("inFlight", inFlight.get());
         status.put("interactiveWaiters", interactiveWaiters.get());
         status.put("backgroundActive", backgroundGenerationThread.get() != null);
+        status.put("backgroundIsolated", isBackgroundProviderIsolated());
+        status.put("backgroundModel", provider(true).model());
         status.put("maxConcurrent", Math.max(1, config.getLlm().getMaxConcurrentRequests()));
         status.put("cacheEntries", responseCache.size());
         status.put("cacheHits", cacheHits.sum());
@@ -346,11 +371,11 @@ public class LlmClient {
         return status;
     }
 
-    private WebClient webClient(String accept) {
-        AssistantConfig.Llm llm = config.getLlm();
+    private WebClient webClient(String accept, boolean background) {
+        ProviderConfig provider = provider(background);
         return webClientBuilder
-                .baseUrl(trimTrailingSlash(llm.getBaseUrl()))
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + llm.getApiKey())
+                .baseUrl(trimTrailingSlash(provider.baseUrl()))
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + provider.apiKey())
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .defaultHeader(HttpHeaders.ACCEPT, accept)
                 .build();
@@ -370,7 +395,7 @@ public class LlmClient {
         assertCircuitAvailable();
         interactiveWaiters.incrementAndGet();
         try {
-            Thread background = generationSlots.availablePermits() == 0
+            Thread background = !isBackgroundProviderIsolated() && generationSlots.availablePermits() == 0
                     ? backgroundGenerationThread.get() : null;
             long waitMillis = Math.max(0, config.getLlm().getQueueTimeoutMillis());
             if (background != null && background != Thread.currentThread()) {
@@ -393,15 +418,17 @@ public class LlmClient {
     }
 
     private void acquireBackgroundGenerationSlot() {
-        assertCircuitAvailable();
+        boolean isolated = isBackgroundProviderIsolated();
+        if (!isolated) assertCircuitAvailable();
         Thread current = Thread.currentThread();
-        if (interactiveWaiters.get() > 0
+        if ((!isolated && interactiveWaiters.get() > 0)
                 || !backgroundGenerationThread.compareAndSet(null, current)) {
             throw new LlmException("Фоновый LLM-анализ отложен: ассистент обрабатывает вопрос пользователя");
         }
         boolean acquired = false;
         try {
-            acquired = interactiveWaiters.get() == 0 && generationSlots.tryAcquire();
+            Semaphore slots = isolated ? backgroundGenerationSlots : generationSlots;
+            acquired = (isolated || interactiveWaiters.get() == 0) && slots.tryAcquire();
             if (!acquired) {
                 throw new LlmException("Фоновый LLM-анализ отложен: языковая модель занята");
             }
@@ -411,9 +438,13 @@ public class LlmClient {
         }
     }
 
-    private void releaseGenerationSlot() {
+    private void releaseGenerationSlot(boolean background) {
         inFlight.updateAndGet(value -> Math.max(0, value - 1));
-        generationSlots.release();
+        if (background && isBackgroundProviderIsolated()) {
+            backgroundGenerationSlots.release();
+        } else {
+            generationSlots.release();
+        }
     }
 
     private void recordProviderSuccess() {
@@ -594,5 +625,8 @@ public class LlmClient {
     }
 
     private record CachedResponse(String text, long expiresAtMillis) {
+    }
+
+    private record ProviderConfig(String baseUrl, String apiKey, String model) {
     }
 }

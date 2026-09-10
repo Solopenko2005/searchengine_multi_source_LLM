@@ -90,6 +90,9 @@ assistant:
     queue-timeout-millis: ${OPENAI_QUEUE_TIMEOUT_MILLIS:500}
     background-timeout-seconds: ${OPENAI_BACKGROUND_TIMEOUT_SECONDS:35}
     background-max-output-tokens: ${OPENAI_BACKGROUND_MAX_OUTPUT_TOKENS:320}
+    background-base-url: ${OPENAI_BACKGROUND_BASE_URL:}
+    background-api-key: ${OPENAI_BACKGROUND_API_KEY:}
+    background-model: ${OPENAI_BACKGROUND_MODEL:}
     circuit-failure-threshold: ${OPENAI_CIRCUIT_FAILURE_THRESHOLD:3}
     circuit-cooldown-seconds: ${OPENAI_CIRCUIT_COOLDOWN_SECONDS:30}
     response-cache-ttl-seconds: ${OPENAI_RESPONSE_CACHE_TTL_SECONDS:300}

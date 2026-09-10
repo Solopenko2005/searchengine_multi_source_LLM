@@ -85,9 +85,11 @@ lms server start --port 1234 --bind 0.0.0.0
 
 Командой `lms ls` проверьте фактические идентификаторы загруженных моделей и при
 необходимости скорректируйте команду `load`. LM Studio обслуживает только
-embedding-модель на 1234. Qwen3-4B запускается отдельной службой на 1235 с явно
-заданными восемью CPU-потоками. Такое разделение не позволяет фоновой смысловой
-индексации блокировать ответы ассистента. Оба сервера слушают сетевой интерфейс,
+embedding-модель на 1234. Интерактивная Qwen3-4B запускается отдельной службой на
+1235 с восемью CPU-потоками, а второй экземпляр той же модели на 1236 выполняет
+только анализ тематик с двумя потоками и пониженным приоритетом ОС. Такое разделение
+не позволяет ни смысловой индексации, ни анализу тематик блокировать ответы
+ассистента. Серверы слушают сетевой интерфейс,
 чтобы к ним мог обратиться контейнер приложения, но firewall обязан блокировать
 публичный доступ.
 
@@ -100,9 +102,10 @@ embedding-модель на 1234. Qwen3-4B запускается отдельн
 `ASSISTANT_RAG_*`, `OPENAI_MAX_OUTPUT_TOKENS` и `OPENAI_TIMEOUT_SECONDS`, не
 пересобирая приложение.
 
-Фоновый анализ тематик использует `OPENAI_BACKGROUND_TIMEOUT_SECONDS` и
-`OPENAI_BACKGROUND_MAX_OUTPUT_TOKENS`. Он имеет более низкий приоритет: новый
-вопрос пользователя прерывает пересчёт тем и получает слот локальной LLM.
+Анализ тематик запускается только кнопкой пользователя и использует
+`LLM_BACKGROUND_BASE_URL`, `OPENAI_BACKGROUND_TIMEOUT_SECONDS` и
+`OPENAI_BACKGROUND_MAX_OUTPUT_TOKENS`. Отдельный низкоприоритетный процесс не
+занимает слот интерактивного чата.
 
 Сохранённый Lucene-векторный индекс переиспользуется после перезапуска, если число
 готовых фрагментов совпадает с PostgreSQL. Во время интерактивного ответа фоновая
@@ -110,11 +113,14 @@ embedding-модель на 1234. Qwen3-4B запускается отдельн
 
 ```bash
 sudo install -m 0755 deploy/scripts/run-llm-inference.sh /home/scientific/app/deploy/scripts/run-llm-inference.sh
+sudo install -m 0755 deploy/scripts/run-llm-background.sh /home/scientific/app/deploy/scripts/run-llm-background.sh
 sudo install -m 0644 deploy/systemd/lmstudio.service /etc/systemd/system/lmstudio.service
 sudo install -m 0644 deploy/systemd/llm-inference.service /etc/systemd/system/llm-inference.service
+sudo install -m 0644 deploy/systemd/llm-background.service /etc/systemd/system/llm-background.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now lmstudio
 sudo systemctl enable --now llm-inference
+sudo systemctl enable --now llm-background
 ```
 
 ## 4. Запуск и проверка

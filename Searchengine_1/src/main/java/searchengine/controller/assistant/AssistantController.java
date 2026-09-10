@@ -68,12 +68,9 @@ public class AssistantController {
     @GetMapping("/topics")
     public TopicsSummaryResponse topics() {
         TopicsSummaryResponse response = assistantService.topics();
-        boolean refreshing = topicJobService.isRunning();
-        if (!refreshing && response.isStale()
-                && (response.getTopics() == null || response.getTopics().isEmpty())) {
-            refreshing = topicJobService.start();
-        }
-        response.setRefreshing(refreshing);
+        // Opening the Assistant tab must be read-only. Topic analysis is an
+        // expensive LLM job and starts only after the explicit Analyze action.
+        response.setRefreshing(topicJobService.isRunning());
         return response;
     }
 
