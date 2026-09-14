@@ -641,10 +641,23 @@ a { color: inherit; }
 .Contact-links span { color: #77819a; font-size: 10px; }
 .Contact-links strong { color: var(--blue); font-size: 12px; overflow-wrap: anywhere; }
 
-.Support { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 24px; align-items: center; margin-top: 20px; padding: 25px 32px; border-radius: 18px; background: var(--green); }
-.Support-logo { display: block; width: 153px; height: 74px; object-fit: contain; }
-.Support p { margin: 0; color: #485574; font-size: 12px; font-weight: 600; }
-.Support a { color: var(--blue); font-size: 11px; font-weight: 800; }
+.Partners { background: var(--cream); }
+.Partners-heading { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(280px,.75fr); gap: clamp(45px,8vw,130px); align-items: end; margin-bottom: clamp(48px,6vw,78px); }
+.Partners-panel { display: grid; grid-template-columns: minmax(230px,.8fr) minmax(320px,1.35fr) minmax(230px,.8fr); gap: 20px; align-items: stretch; padding: 20px; border: 1px solid var(--line); border-radius: 30px; background: #f5f7fb; box-shadow: 0 22px 65px rgba(38,60,105,.08); }
+.PartnerCard { display: flex; min-height: 240px; flex-direction: column; align-items: center; justify-content: center; gap: 25px; padding: 34px 26px; overflow: hidden; border: 1px solid rgba(61,86,143,.2); border-radius: 22px; background: var(--cream); color: var(--blue); text-align: center; text-decoration: none; transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease; }
+.PartnerCard:hover { border-color: var(--blue); box-shadow: 0 18px 38px rgba(38,60,105,.12); transform: translateY(-5px); }
+.PartnerCard:focus-visible { outline: 3px solid var(--green); outline-offset: 3px; }
+.PartnerCard > span:last-child { font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.PartnerCard_fasie img { display: block; width: min(220px,100%); height: 105px; object-fit: contain; }
+.Partners-copy { display: flex; min-height: 240px; flex-direction: column; justify-content: center; padding: clamp(34px,4vw,58px); border-radius: 22px; background: var(--blue); color: #fff; }
+.Partners-copy .Card-kicker { color: var(--green); }
+.Partners-copy > p:last-child { margin: 0; color: rgba(255,255,255,.78); font-size: 14px; line-height: 1.85; }
+.Partners-copy strong { color: #fff; font-weight: 700; }
+.PlatformMark { display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--blue); }
+.PlatformMark i { width: 18px; height: 92px; border: solid var(--green); }
+.PlatformMark i:first-child { border-width: 7px 0 7px 7px; }
+.PlatformMark i:last-child { border-width: 7px 7px 7px 0; }
+.PlatformMark b { font-size: 9px; font-weight: 800; line-height: 1.35; text-align: left; }
 
 .FinalCta { position: relative; min-height: 600px; overflow: hidden; background: var(--blue); color: #fff; }
 .FinalCta-waves { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .6; }
@@ -726,6 +739,9 @@ a { color: inherit; }
     .Advantages-layout > div:first-child { position: static; }
     .Roadmap { grid-template-columns: 1fr; gap: 50px; }
     .Contact-card { grid-template-columns: 1fr; gap: 45px; }
+    .Partners-heading { grid-template-columns: 1fr; gap: 30px; }
+    .Partners-panel { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .Partners-copy { grid-column: 1 / -1; grid-row: 1; }
 }
 
 @media (max-width: 760px) {
@@ -765,8 +781,9 @@ a { color: inherit; }
     .Roadmap li { grid-template-columns: 62px minmax(0,1fr); gap: 15px; }
     .Roadmap li p { grid-column: 2; }
     .Contact-links a { align-items: flex-start; flex-direction: column; }
-    .Support { grid-template-columns: auto 1fr; }
-    .Support a { grid-column: 2; }
+    .Partners-panel { grid-template-columns: 1fr; padding: 14px; }
+    .Partners-copy { grid-column: auto; grid-row: auto; }
+    .PartnerCard { min-height: 200px; }
     .FinalCta,
     .FinalCta-content { min-height: 500px; }
     .LandingFooter { grid-template-columns: 1fr; gap: 42px; padding: 55px 20px 28px; }
@@ -787,8 +804,6 @@ a { color: inherit; }
     .Section-heading { margin-bottom: 48px; }
     .ContrastCard { min-height: 0; }
     .Contact-card { padding: 30px 22px; }
-    .Support { grid-template-columns: 1fr; text-align: left; }
-    .Support a { grid-column: auto; }
     .CookieNotice { right: 12px; bottom: 12px; width: calc(100vw - 24px); }
 }
 
