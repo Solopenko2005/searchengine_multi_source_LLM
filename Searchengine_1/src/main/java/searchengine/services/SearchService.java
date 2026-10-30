@@ -14,6 +14,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import java.util.concurrent.Semaphore;
+import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 @RequiredArgsConstructor
@@ -136,7 +137,7 @@ public class SearchService {
                 result.setUrl(document
                         ? "/documents/" + page.getId() + "?query="
                                 + URLEncoder.encode(query, StandardCharsets.UTF_8)
-                        : page.getSite().getUrl() + page.getPath());
+                        : buildResultUrl(page.getSite(), page.getPath()));
                 results.add(result);
                 logger.info("Добавлен результат: {}", result);
             }
@@ -154,6 +155,21 @@ public class SearchService {
         }
 
         return response;
+    }
+
+    private String buildResultUrl(Site site, String pagePath) {
+        if (site.getSourceType() == SourceType.SCIENTIFIC_ARTICLE) {
+            return site.getUrl();
+        }
+
+        try {
+            URI source = URI.create(site.getUrl());
+            String origin = source.getScheme() + "://" + source.getRawAuthority();
+            String path = pagePath == null || pagePath.isBlank() ? "/" : pagePath;
+            return origin + (path.startsWith("/") ? path : "/" + path);
+        } catch (IllegalArgumentException exception) {
+            return site.getUrl() + (pagePath == null ? "" : pagePath);
+        }
     }
 
     private List<Lemma> filterCommonLemmas(Site site, List<String> lemmas) {
